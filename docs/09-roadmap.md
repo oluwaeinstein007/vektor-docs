@@ -28,17 +28,19 @@
 
 ### Phase 1 — Ingestion & Base Map (Weeks 5–10)
 
+**All tasks done as of 2026-08-21**, except the NTP/PTP daemon half of SVC-004 (host/infra config, not TS application code — tracked separately, not blocking). Every service below is verified against real infrastructure (real Postgres/PostGIS, real Kafka, real RTSP/MQTT sources, a real browser) rather than mocks — see [[vektor-build-conventions]].
+
 | Task ID | Task | Owner |
 |---|---|---|
-| SVC-001 | `ingest-svc`: fluent-ffmpeg RTSP/SRT → kafkajs producer — **done 2026-08-21**, verified against a real MediaMTX RTSP source + real Kafka broker | Backend |
-| SVC-002 | `ingest-svc`: GeoTIFF/SAR pipeline — **done 2026-08-21** via `geotiff` (pure JS); `gdal-async` isn't installable in the current sandbox (no prebuilt binary for this Node ABI, source-build fallback blocked by network access to nodejs.org headers) — see `ingest-svc/src/geotiff/ingestGeoTiff.ts` | Backend |
-| SVC-003 | `ingest-svc`: AIS + ADS-B + MQTT IoT adapters — **done 2026-08-21**: hand-rolled ITU-R M.1371 AIVDM decoder (Class A position reports), SBS-1 text adapter for ADS-B, Mosquitto-verified MQTT republisher | Backend |
-| SVC-004 | NTP/PTP clock sync daemon; `sensor_ts` validation middleware — **middleware half done 2026-08-21** (`@vektor/kafka`'s `assertValidSensorTs`, used by every SVC-001/002/003 adapter); the NTP/PTP daemon itself is host/infra config, not application code | Backend |
-| SVC-005 | `geospatial-svc`: PostGIS CRUD + spatial query API | Backend |
-| SVC-006 | Map tile server: PMTiles static server | Backend |
-| FE-001 | Web dashboard: MapLibre GL base map + layer system | Frontend |
-| FE-002 | Web dashboard: Socket.io entity rendering | Frontend |
-| FE-003 | Web dashboard: sensor health panel | Frontend |
+| SVC-001 | `ingest-svc`: fluent-ffmpeg RTSP/SRT → kafkajs producer — **done**, verified against a real MediaMTX RTSP source + real Kafka broker | Backend |
+| SVC-002 | `ingest-svc`: GeoTIFF/SAR pipeline — **done** via `geotiff` (pure JS); `gdal-async` isn't installable in the current sandbox (no prebuilt binary for this Node ABI, source-build fallback blocked by network access to nodejs.org headers) — see `ingest-svc/src/geotiff/ingestGeoTiff.ts` | Backend |
+| SVC-003 | `ingest-svc`: AIS + ADS-B + MQTT IoT adapters — **done**: hand-rolled ITU-R M.1371 AIVDM decoder (Class A position reports), SBS-1 text adapter for ADS-B, Mosquitto-verified MQTT republisher | Backend |
+| SVC-004 | NTP/PTP clock sync daemon; `sensor_ts` validation middleware — **middleware half done** (`@vektor/kafka`'s `assertValidSensorTs`, used by every SVC-001/002/003 adapter); the NTP/PTP daemon itself is host/infra config, not application code | Backend |
+| SVC-005 | `geospatial-svc`: PostGIS CRUD + spatial query API — **done**, integration-tested against live PostGIS; its `entities` schema/response shape was later fixed to actually match the canonical `Entity` contract (2026-08-21) | Backend |
+| SVC-006 | Map tile server: PMTiles static server — **done** | Backend |
+| FE-001 | Web dashboard: MapLibre GL base map + layer system — **done** | Frontend |
+| FE-002 | Web dashboard: Socket.io entity rendering — **done**: typed event contract matches §13.2 exactly, every inbound event Zod-validated at the socket boundary | Frontend |
+| FE-003 | Web dashboard: sensor health panel — **done**: live per-sensor status/latency/drop-rate, flags the REQ-1.8 >1% drop-rate threshold | Frontend |
 
 ### Phase 2 — CV & Tracking Pipeline (Weeks 11–18)
 
