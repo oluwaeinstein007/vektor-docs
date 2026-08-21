@@ -30,10 +30,10 @@
 
 | Task ID | Task | Owner |
 |---|---|---|
-| SVC-001 | `ingest-svc`: fluent-ffmpeg RTSP/SRT → kafkajs producer | Backend |
+| SVC-001 | `ingest-svc`: fluent-ffmpeg RTSP/SRT → kafkajs producer — **done 2026-08-21**, verified against a real MediaMTX RTSP source + real Kafka broker | Backend |
 | SVC-002 | `ingest-svc`: gdal-async GeoTIFF/SAR pipeline | Backend |
 | SVC-003 | `ingest-svc`: AIS + ADS-B + MQTT IoT adapters | Backend |
-| SVC-004 | NTP/PTP clock sync daemon; `sensor_ts` validation middleware | Backend |
+| SVC-004 | NTP/PTP clock sync daemon; `sensor_ts` validation middleware — **middleware half done 2026-08-21** (`@vektor/kafka`'s `assertValidSensorTs`); the NTP/PTP daemon itself is host/infra config, not application code | Backend |
 | SVC-005 | `geospatial-svc`: PostGIS CRUD + spatial query API | Backend |
 | SVC-006 | Map tile server: PMTiles static server | Backend |
 | FE-001 | Web dashboard: MapLibre GL base map + layer system | Frontend |
