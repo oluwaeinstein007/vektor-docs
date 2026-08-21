@@ -17,6 +17,8 @@ export * from '@vektor/proto'
 
 ### 12.2 Drizzle ORM Schema (PostgreSQL + PostGIS)
 
+The DB row is not a 1:1 copy of the canonical `Entity` contract (§7 Epic 3) — `position` splits across a 2D PostGIS point plus separate `alt_m`/`accuracy_m` columns (drizzle-orm's `geometry` column only parses 2D EWKB points; see `packages/db/src/schema/entities.ts`), and `mgrs` is never stored — it's a pure function of lon/lat, computed at read time via the `mgrs` package. Each consuming service owns a storage-row → wire-`Entity` mapper (e.g. `services/geospatial-svc/src/mappers/entity.ts`) that runs every response through `Entity.parse()` so a schema drift fails loudly instead of shipping silently — this is the enforcement mechanism behind REQ-9.1's "100% of public endpoints ... schema-validated."
+
 ```typescript
 // packages/db/src/schema/entities.ts
 import { pgTable, uuid, text, real, geometry, timestamp, jsonb } from 'drizzle-orm/pg-core'
@@ -27,7 +29,10 @@ export const entities = pgTable('entities', {
   confidence:     real('confidence').notNull(),
   status:         text('status').notNull().default('ACTIVE'),
   affiliation:    text('affiliation').notNull().default('UNKNOWN'),
-  position:       geometry('position', { type: 'point', srid: 4326 }),
+  source_sensors: text('source_sensors').array().notNull().default([]),
+  position:       geometry('position', { type: 'point', srid: 4326 }), // lon/lat only
+  alt_m:          real('alt_m').notNull().default(0),
+  accuracy_m:     real('accuracy_m').notNull().default(0),
   kinematics:     jsonb('kinematics'),
   metadata:       jsonb('metadata'),
   first_detected: timestamp('first_detected').defaultNow(),
