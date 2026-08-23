@@ -44,14 +44,16 @@
 
 ### Phase 2 — CV & Tracking Pipeline (Weeks 11–18)
 
+**All tasks done as of 2026-08-23.** No GPU is available in the current sandbox, so GPU throughput itself is unverified — everything else (the real pipeline mechanics: training, export, inference, tracking, hot-swap) is verified against real infra on CPU. See [[vektor-build-conventions]] for the concrete substitutions this phase needed (`opencv4nodejs` → Kalman-filter velocity, same class of native-binding problem as `gdal-async` in Phase 1).
+
 | Task ID | Task | Owner | Repo |
 |---|---|---|---|
-| ML-001 | `cv-train-svc`: YOLOv8 training + ONNX INT8 export | ML | `vektor-ml` |
-| ML-002 | `cv-inference-svc`: onnxruntime-node GPU build + ONNX loading | ML/Backend | `vektor-platform` |
-| ML-003 | `cv-inference-svc`: Kafka frame consumer → inference → detection publisher | Backend | `vektor-platform` |
-| ML-004 | DeepSORT tracker: TypeScript re-implementation (mathjs) | ML/Backend | `vektor-platform` |
-| ML-005 | Optical flow velocity/heading estimation (opencv4nodejs) | ML/Backend | `vektor-platform` |
-| ML-006 | ONNX hot-swap endpoint | Backend | `vektor-platform` |
+| ML-001 | `cv-train-svc`: YOLOv8 training + ONNX INT8 export — **done**, real end-to-end run (synthetic dataset, 1 CPU epoch, export, reload via onnxruntime) | ML | `vektor-ml` |
+| ML-002 | `cv-inference-svc`: onnxruntime-node GPU build + ONNX loading — **done**; GPU path implemented with Pitfall 5's fail-fast discipline (`REQUIRE_GPU=true` never silently falls back to CPU) but unverified on real GPU hardware, which this sandbox doesn't have | ML/Backend | `vektor-platform` |
+| ML-003 | `cv-inference-svc`: Kafka frame consumer → inference → detection publisher — **done**, verified against a real Kafka broker + the real checked-in ONNX fixture | Backend | `vektor-platform` |
+| ML-004 | DeepSORT tracker: TypeScript re-implementation (mathjs) — **done**: Kalman filter + greedy IoU association (a documented simplification of the Hungarian algorithm) | ML/Backend | `vektor-platform` |
+| ML-005 | Velocity/heading estimation — **done via the Kalman-filter path**, not optical flow: `opencv4nodejs` needs a full OpenCV source build with no prebuilt binary, not installable in this sandbox. REQ-2.5 explicitly allows either path | ML/Backend | `vektor-platform` |
+| ML-006 | ONNX hot-swap endpoint — **done**, verified with two genuinely different real models (different class count *and* input size) via a real multipart upload | Backend | `vektor-platform` |
 
 ### Phase 3 — Data Fusion Engine (Weeks 19–26)
 
