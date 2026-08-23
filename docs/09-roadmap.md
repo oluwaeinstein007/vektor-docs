@@ -57,13 +57,17 @@
 
 ### Phase 3 — Data Fusion Engine (Weeks 19–26)
 
+**All tasks done as of 2026-08-23.** `fusion-svc` is also the Socket.io gateway `apps/web`'s FE-002 (Phase 1) needed — verified end-to-end against real Kafka, real Redis, real PostGIS, real Postgres, and a real socket.io-client (`tests/pipeline.integration.test.ts`): an AIS fix flows through the watermark window into an EKF-smoothed track, gets no-strike-flagged, persists to `entities`, and is corroborated by a separate EW/RF fix onto the *same* track before either reaches a client over the socket. See [[vektor-build-conventions]] for the noise-tuning, drizzle-polygon, and SRID pitfalls this phase surfaced.
+
 | Task ID | Task | Owner |
 |---|---|---|
-| SVC-007 | `fusion-svc`: kafkajs consumer groups + Redis Streams topology | Backend |
-| SVC-008 | Extended Kalman Filter (TS, mathjs) | Backend |
-| SVC-009 | Ontology mapping layer: detections → canonical Entity schema (Zod) | Backend |
-| SVC-010 | Blue-force tracking + no-strike zone engine (PostGIS ST_Contains) | Backend |
-| SVC-011 | EW/RF signal correlation via Redis Streams join | Backend |
+| SVC-007 | `fusion-svc`: kafkajs consumer groups + Redis Streams topology — **done**: `src/kafka/ingestConsumers.ts` (schema-validated at the consumer boundary, Pitfall 1) + `@vektor/redis`'s `WatermarkWindow` (500ms event-time watermark, not Kafka/Redis arrival order) | Backend |
+| SVC-008 | Extended Kalman Filter (TS, mathjs) — **done**: `src/ekf/extendedKalmanFilter.ts`, a real 6-state geodetic CV-model EKF (lat/lon/alt + N/E/U velocity) with a per-step-recomputed Jacobian for the lat/lon-coupling nonlinearity, not a relabeled linear KF | Backend |
+| SVC-009 | Ontology mapping layer: detections → canonical Entity schema (Zod) — **done**: `src/ontology/mapToEntity.ts`, routed through `Entity.parse()` | Backend |
+| SVC-010 | Blue-force tracking + no-strike zone engine (PostGIS ST_Contains) — **done**: `src/blueforce/`, meters-accurate auto-buffer zones (`ST_Buffer` via a `geography` cast) kept in sync per asset update, plus analyst-drawn manual zones | Backend |
+| SVC-011 | EW/RF signal correlation via Redis Streams join — **done**: `EwRfEmission.estimated_position` goes through the same `TrackManager.correlate()` gate every domain uses, over the same watermark-windowed Redis Streams | Backend |
+
+**Scope note**: CV `DetectionEvent` tracks (`detection.tracked`) carry only pixel-space bbox/velocity — no service in this system geo-registers a camera to real-world coordinates, so they're consumed and windowed (SVC-007's topology is complete for this topic) but don't yet produce fused entities. Not a roadmap gap for this phase; flagged for whichever future phase adds geo-registration.
 
 ### Phase 4 — Decision Support (Weeks 27–34)
 
