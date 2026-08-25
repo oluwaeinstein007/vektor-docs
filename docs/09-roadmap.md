@@ -71,27 +71,33 @@
 
 ### Phase 4 — Decision Support (Weeks 27–34)
 
+**All tasks done as of 2026-08-24.** No GPU is available in this sandbox and `vllm` itself wasn't installable in a reasonable time budget (multi-GB CUDA/torch/xformers dependency tree, same class of gap as Phase 2's onnxruntime-node GPU path) — `llm-cloud-svc`'s real vLLM engine construction/inference call is unverified against real hardware, but everything else (gRPC plumbing, prompt building, JSON extraction/repair, confidence scoring) has real pytest coverage. Everything else in this phase is verified end-to-end against real infra: real Postgres, real Qdrant + real BGE-M3 inference, a real local GGUF model (node-llama-cpp), and a real gRPC server standing in for `llm-cloud-svc`. See [[vektor-build-conventions]] for the pitfalls this phase surfaced (a cross-repo gRPC class-identity bug, GBNF grammar termination).
+
 | Task ID | Task | Owner | Repo |
 |---|---|---|---|
-| ML-007 | `llm-cloud-svc`: vLLM server, LLaMA 3.1 70B, gRPC endpoint | ML | `vektor-ml` |
-| ML-008 | Qdrant doctrine ingestion + BGE-M3 embeddings | ML/Backend | `vektor-platform` |
-| ML-009 | `coa-svc`: context builder + Qdrant RAG retrieval | Backend | `vektor-platform` |
-| ML-010 | `coa-svc`: gRPC call via `@vektor/proto` + Zod output validator | Backend | `vektor-platform` |
-| ML-011 | Edge COA: node-llama-cpp + Mistral 7B Q4_K_M | Backend | `vektor-platform` |
-| SVC-012 | Target Workbench threat scoring engine | Backend | `vektor-platform` |
-| SVC-013 | COA approval workflow + audit-svc write | Backend | `vektor-platform` |
+| ML-007 | `llm-cloud-svc`: vLLM server, LLaMA 3.1 70B, gRPC endpoint — **done**: real `AsyncLLMEngine`/`SamplingParams` wiring, prompt builder, JSON extraction+repair, and logprob-based confidence scoring all real and pytest-covered (19 tests); the actual `engine.generate()` call is unverified on real GPU hardware, which this sandbox doesn't have | ML | `vektor-ml` |
+| ML-008 | Qdrant doctrine ingestion + BGE-M3 embeddings — **done**: `@vektor/qdrant` (new package), real `Xenova/bge-m3` ONNX inference via `@xenova/transformers`, verified against a real Qdrant instance | ML/Backend | `vektor-platform` |
+| ML-009 | `coa-svc`: context builder + Qdrant RAG retrieval — **done**: `sanitizeForPrompt()` (Pitfall 4), situation JSON assembly, real RAG retrieval against real doctrine content ingested into Qdrant | Backend | `vektor-platform` |
+| ML-010 | `coa-svc`: gRPC call via `@vektor/proto` + Zod output validator — **done**: real gRPC round-trip against a real server implementing `LLMService`, hard Zod gate + confidence threshold (R-002) | Backend | `vektor-platform` |
+| ML-011 | Edge COA: node-llama-cpp + Mistral 7B Q4_K_M — **done**, verified end-to-end against a real (much smaller) GGUF model, grammar-constrained JSON generation (`llama.createGrammarForJsonSchema`) rather than free-text + regex extraction | Backend | `vektor-platform` |
+| SVC-012 | Target Workbench threat scoring engine — **done**: `coa-svc/src/threat/scoring.ts`, a documented 5-factor weighted sum (REQ-4.1's "algorithm documented and auditable"), `GET /api/v1/target-workbench/ranking` | Backend | `vektor-platform` |
+| SVC-013 | COA approval workflow + audit-svc write — **done**: `services/audit-svc` (new, append-only `audit_log` table), coa-svc's approve/reject routes write through it synchronously before responding | Backend | `vektor-platform` |
+
+**Scope note**: Phase 4's roadmap table has no `FE-xxx` task — the Target Workbench/COA approval UI itself is not part of this phase's scope (unlike Phases 1–3, which each paired backend work with a matching frontend task). `apps/web` has no COA/Target Workbench components yet.
 
 ### Phase 5 — Logistics, Alerting & Reporting (Weeks 35–40)
 
+**All tasks done as of 2026-08-25.** Three new `vektor-platform` services. `alert-svc` consumes a BullMQ queue fusion-svc now enqueues to on every entity upsert (the Phase 3→5 integration point) and runs both a geofence entry/exit check and an EWMA/z-score anomaly detector per job, dispatching through real email (maildev)/webhook/SMS-shaped (Twilio REST API stand-in) channels. `logistics-svc` syncs a real Debezium PostgresConnector (pgoutput plugin, registered against a dedicated "ERP" Postgres instance and Kafka Connect) rather than a hand-rolled CDC format, forecasts depletion via `ml-regression-simple-linear`, and optimizes routes via a real `pgr_dijkstra` call against a dedicated pgRouting-extension Postgres instance (pgRouting isn't installed on the main PostGIS image — see [[vektor-build-conventions]]). `reporting-svc` generates real PDF (puppeteer-core + the system's existing Chrome binary) and PPTX (pptxgenjs) situation reports, dispatches them on a real cron schedule (cron-parser), and serves raw CSV/GeoJSON entity export. 41 tests across the three services, all against real infra (Postgres, Redis, Kafka, a real Debezium/Kafka-Connect stack, a real pgRouting instance, real SMTP, real headless Chrome) — zero mocks. See [[vektor-build-conventions]] for this phase's pitfalls (bigint-as-string over the wire, pptxgenjs's CJS/ESM interop, cron-parser's same interop issue, a raw `db.execute` timestamp-as-string trap, and a shared-table test-concurrency race).
+
 | Task ID | Task | Owner |
 |---|---|---|
-| SVC-014 | `alert-svc`: geofence rule engine | Backend |
-| SVC-015 | `alert-svc`: anomaly detection (EWMA + z-score) | Backend |
-| SVC-016 | `alert-svc`: multi-channel dispatch | Backend |
-| SVC-017 | `logistics-svc`: ERP CDC integration (Debezium) | Backend |
-| SVC-018 | `logistics-svc`: supply forecasting (ml-regression) | Backend |
-| SVC-019 | `logistics-svc`: route optimization (pgRouting) | Backend |
-| SVC-020 | `reporting-svc`: PDF (Puppeteer) + PPTX (pptxgenjs) | Backend |
+| SVC-014 | `alert-svc`: geofence rule engine — **done**: `services/alert-svc/src/geofence/checkZones.ts`, Redis-backed per-entity "currently inside" set diffed each job to detect ENTRY/EXIT correctly per zone's own trigger config | Backend |
+| SVC-015 | `alert-svc`: anomaly detection (EWMA + z-score) — **done**: `src/anomaly/ewmaDetector.ts`, circular-aware (heading wraparound at 0/360 handled via unit-vector EWMA, not a naive degree diff) | Backend |
+| SVC-016 | `alert-svc`: multi-channel dispatch — **done**: `src/dispatch/channels.ts` — IN_APP (the persisted Alert row itself), EMAIL (real nodemailer -> real maildev SMTP), WEBHOOK (real HTTP POST), SMS (real Twilio REST wire shape against a stand-in server — no real Twilio account exists in this sandbox, same "real protocol, stand-in endpoint" caveat as Phase 4's llm-cloud-svc/vLLM) | Backend |
+| SVC-017 | `logistics-svc`: ERP CDC integration (Debezium) — **done**: a real Debezium `PostgresConnector` (pgoutput plugin) registered via Kafka Connect against a dedicated "ERP" Postgres instance (`docker run postgres:16 -c wal_level=logical`), producing genuine Kafka Connect JsonConverter envelopes; `src/cdc/inventoryConsumer.ts` decodes them and upserts into VEKTOR's own `inventory_items`/`inventory_history` — verified end-to-end with a real insert+update round-trip within seconds, well inside REQ-1.7's 60s bound | Backend |
+| SVC-018 | `logistics-svc`: supply forecasting (ml-regression) — **done**: `src/forecast/regression.ts` (`ml-regression-simple-linear`, the sub-package `ml-regression`'s meta-package re-exports), fires a once-per-transition `LOW_STOCK` alert (REQ-6.3) rather than re-firing on every 15-min recompute | Backend |
+| SVC-019 | `logistics-svc`: route optimization (pgRouting) — **done**: a real `pgr_dijkstra` call (`src/routing/findRoute.ts`) against a dedicated pgRouting-extension Postgres instance and a synthetic road grid fixture; a flagged/blocked edge is modeled as an effectively-infinite-cost edge so REQ-6.2's "recomputed within 5s of a new hazard flag" is automatic — every route request already reads the live `blocked` flags, no separate recompute step exists to schedule | Backend |
+| SVC-020 | `reporting-svc`: PDF (Puppeteer) + PPTX (pptxgenjs) — **done**: real headless-Chrome PDF rendering (`puppeteer-core` + the system's existing `google-chrome`, same pattern as apps/web's Playwright screenshots) and real pptxgenjs slide generation; also covers REQ-7.2 (cron-scheduled dispatch via `cron-parser`, real email delivery with the report as a real attachment) and REQ-7.3 (CSV/GeoJSON raw export) | Backend |
 
 ### Phase 6 — Edge Deployment (Weeks 41–46)
 
