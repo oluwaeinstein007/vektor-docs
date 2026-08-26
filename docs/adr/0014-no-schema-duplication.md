@@ -4,7 +4,7 @@
 
 ## Context
 
-VEKTOR is a 6-repo polyrepo (§9). Without a single source of truth for shared data shapes, a Kafka event schema, a REST response shape, and a Socket.io event payload could each drift into their own hand-maintained copy across `vektor-platform`, `vektor-ml`, and `apps/web` — exactly R-006/R-010's risk (schema drift breaking consumers; polyrepo overhead slowing cross-cutting changes).
+VEKTOR is a 7-repo polyrepo (§9). Without a single source of truth for shared data shapes, a Kafka event schema, a REST response shape, and a Socket.io event payload could each drift into their own hand-maintained copy across `vektor-backend`, `vektor-web`, and `vektor-ml` — exactly R-006/R-010's risk (schema drift breaking consumers; polyrepo overhead slowing cross-cutting changes).
 
 ## Decision
 

@@ -63,7 +63,7 @@
 
 | Requirement | Specification |
 |---|---|
-| Core monorepo | Turborepo + pnpm workspaces (`vektor-platform`) |
+| Core monorepo | Turborepo + pnpm workspaces (`vektor-backend`, `vektor-web`) |
 | Language | TypeScript strict mode across all TS packages |
 | Shared types | Generated from `vektor-proto`, re-exported via `packages/shared` |
 | Test coverage | ≥ 80% unit coverage; integration tests for all service boundaries |

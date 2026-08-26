@@ -16,7 +16,8 @@ A single monorepo *could* hold everything, including the Python enclave, but tha
 
 | Repo | Contents | Primary Language | Release Cadence |
 |---|---|---|---|
-| **`vektor-platform`** | All TS apps (`web`, `field-pwa`), all TS microservices, shared packages (`db`, `kafka`, `ui`, `config`) | TypeScript | Continuous (multiple deploys/day) |
+| **`vektor-backend`** | All TS microservices, shared backend packages (`db`, `kafka`, `redis`, `qdrant`, `auth`, `config`, `shared`) | TypeScript | Continuous (multiple deploys/day) |
+| **`vektor-web`** | The frontend: `apps/web` (operator dashboard) and eventually `apps/field-pwa`, plus `packages/ui` and its own `packages/config` | TypeScript | Continuous (multiple deploys/day) |
 | **`vektor-ml`** | `cv-train-svc` (YOLOv8/Ultralytics training + ONNX export), `llm-cloud-svc` (vLLM server) | Python | Periodic (model retrain / LLM version bumps) |
 | **`vektor-proto`** | Source-of-truth gRPC `.proto` + JSON-schema contracts for every cross-language and cross-service boundary; generates and publishes `@vektor/proto` (npm) and `vektor-proto` (PyPI) | Protobuf / codegen | Versioned, semver-gated |
 | **`vektor-edge`** | k3s edge bootstrap, Jetson flashing/provisioning scripts, edge Docker Compose overlays, offline map-pack build tooling, hardware-in-the-loop integration tests | Shell / TS / Ansible | Tied to edge hardware release trains |
@@ -37,14 +38,21 @@ A single monorepo *could* hold everything, including the Python enclave, but tha
                     │                                  │
                     ▼                                  ▼
         ┌───────────────────────┐          ┌───────────────────────┐
-        │   vektor-platform      │          │      vektor-ml         │
-        │  (TS services, web)    │          │  (cv-train, llm-cloud) │
+        │   vektor-backend        │          │      vektor-ml         │
+        │  (TS services)          │          │  (cv-train, llm-cloud) │
         └───────────┬─────────────┘          └───────────┬─────────────┘
-                    │ builds & pushes                     │ builds & pushes
-                    ▼                                     ▼
+                    │ publishes @vektor/shared            │
+                    ▼                                     │
+        ┌───────────────────────┐                         │
+        │     vektor-web          │                        │
+        │  (Next.js dashboard,    │                        │
+        │   field-pwa)            │                        │
+        └───────────┬─────────────┘                        │
+                    │ builds & pushes                      │ builds & pushes
+                    ▼                                      ▼
         ┌─────────────────────────────────────────────────────────┐
         │              Container Registry (GHCR / ECR)             │
-        │   ghcr.io/vektor/platform-*     ghcr.io/vektor/ml-*      │
+        │  ghcr.io/vektor/backend-*  ghcr.io/vektor/web-*  ghcr.io/vektor/ml-* │
         └───────────────────────┬───────────────────────────────────┘
                                 │ image tags consumed via GitOps PR
                                 ▼
@@ -61,7 +69,9 @@ A single monorepo *could* hold everything, including the Python enclave, but tha
                     └───────────────────────┘       runtime call to vektor-ml)
 ```
 
-**Key invariant:** `vektor-platform` and `vektor-ml` never share source, a filesystem, or a network namespace at runtime. The *only* thing that crosses that boundary is (a) versioned contract packages published from `vektor-proto` at build time, and (b) gRPC calls at run time. This is the same isolation model as the "Python Enclave Security" policy in §14, just now expressed as a repo topology instead of a paragraph of prose.
+`vektor-web` consumes `@vektor/shared` from `vektor-backend`: a filesystem `link:` in local dev (mirroring how `vektor-backend` itself consumes `vektor-proto`), a published versioned package in production — never a duplicated copy of the schema.
+
+**Key invariant:** `vektor-backend` and `vektor-ml` never share source, a filesystem, or a network namespace at runtime. The *only* thing that crosses that boundary is (a) versioned contract packages published from `vektor-proto` at build time, and (b) gRPC calls at run time. This is the same isolation model as the "Python Enclave Security" policy in §14, just now expressed as a repo topology instead of a paragraph of prose.
 
 ### 9.4 Why a Dedicated Contract Repo (`vektor-proto`)
 
@@ -73,7 +83,7 @@ In the earlier ARES drafts, Zod schemas lived inside the TS monorepo (`packages/
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                    TYPESCRIPT TERRITORY (90%+)  — vektor-platform       │
+│              TYPESCRIPT TERRITORY (90%+)  — vektor-backend + vektor-web │
 │                                                                         │
 │  Ingest · Fusion · CV Serving · Tracking · COA (edge) · Auth · Audit   │
 │  Alerts · Logistics · Reporting · Geospatial · Gateway · Frontend       │
@@ -142,15 +152,12 @@ In the earlier ARES drafts, Zod schemas lived inside the TS monorepo (`packages/
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 9.6 `vektor-platform` Internal Layout (Turborepo + pnpm)
+### 9.6 `vektor-backend` and `vektor-web` Internal Layout (Turborepo + pnpm)
+
+Originally one repo (`vektor-platform`); split so the frontend and backend ship as independent repos/deployments (§9.2). `vektor-web` consumes `vektor-backend/packages/shared` cross-repo (§9.3).
 
 ```
-vektor-platform/
-├── apps/
-│   ├── web/                       # Next.js 15 operator dashboard
-│   ├── field-pwa/                 # Next.js PWA — offline field client
-│   └── api-gateway/               # Kong config + custom gateway plugins (TS)
-│
+vektor-backend/
 ├── services/
 │   ├── ingest-svc/                # fluent-ffmpeg + gdal-async + kafkajs producers
 │   ├── cv-inference-svc/          # onnxruntime-node YOLOv8 + DeepSORT tracker
@@ -164,14 +171,28 @@ vektor-platform/
 │   └── reporting-svc/             # PDF/PPTX sitrep (puppeteer + pptxgenjs)
 │
 ├── packages/
-│   ├── shared/                    # Re-exports generated types from @vektor/proto
+│   ├── shared/                    # Re-exports generated types from @vektor/proto.
+│   │                               # Consumed in-workspace by every service above,
+│   │                               # AND cross-repo by vektor-web/apps/web.
 │   ├── db/                        # Drizzle ORM schema + migrations
 │   ├── kafka/                     # kafkajs wrappers + schema helpers
-│   ├── ui/                        # Shared React components (shadcn/ui base)
 │   └── config/                    # ESLint, TypeScript, Prettier configs
 │
 └── turbo.json
+
+vektor-web/
+├── apps/
+│   ├── web/                       # Next.js 15 operator dashboard
+│   └── field-pwa/                 # Next.js PWA — offline field client (not yet scaffolded)
+│
+├── packages/
+│   ├── ui/                        # Shared React components (shadcn/ui base)
+│   └── config/                    # Own copy of the shared TypeScript base config
+│
+└── turbo.json
 ```
+
+`api-gateway` (Kong config + custom gateway plugins) has no fixed home yet between the two — flagged for whichever future task scaffolds it.
 
 ### 9.7 Sensor-to-Decision Data Flow
 
@@ -227,7 +248,8 @@ vektor-platform/
 | Repo | CI Trigger | Pipeline | Deploy Path |
 |---|---|---|---|
 | `vektor-proto` | PR to contracts | Generate + typecheck TS & Python stubs; semver bump gate | Publish to npm + PyPI on merge to `main` |
-| `vektor-platform` | Every PR | pnpm install → turbo lint/test/build (cached) → SAST | Build container images → push to registry on merge |
+| `vektor-backend` | Every PR | pnpm install → turbo lint/test/build (cached) → SAST | Build container images → push to registry on merge |
+| `vektor-web` | Every PR | pnpm install → turbo lint/test/build (cached) → SAST | Build container image → push to registry on merge |
 | `vektor-ml` | Every PR | Python lint/test → GPU-runner smoke test | Build container images → push to registry on merge; model artifacts → MinIO |
 | `vektor-edge` | Every PR | Cross-compile ARM64 → hardware-in-the-loop tests on a physical Jetson runner (nightly, not per-PR — too slow/expensive to gate every commit) | Flash/provision images on release train |
 | `vektor-infra` | Every PR | `terraform plan` posted as PR comment; policy-as-code check (OPA) | `terraform apply` requires DevOps + Security Lead approval |
@@ -237,7 +259,8 @@ vektor-platform/
 
 | Repo | Default write access | Rationale |
 |---|---|---|
-| `vektor-platform` | All engineers | Highest velocity, lowest individual blast radius per change |
+| `vektor-backend` | All engineers | Highest velocity, lowest individual blast radius per change |
+| `vektor-web` | All engineers | Highest velocity, lowest individual blast radius per change |
 | `vektor-ml` | ML team only | GPU cost control + model-supply-chain integrity (§17, Pitfall 5-equivalent) |
 | `vektor-proto` | Requires 1 platform + 1 ML approver | Forces cross-team review on any boundary change |
 | `vektor-edge` | Platform + hardware/field engineers | Physical hardware access implied; kept separate from core service write access |

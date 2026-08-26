@@ -8,7 +8,7 @@
 
 Roadmap SEC-004 calls for "Penetration testing + red team exercise." A genuine red-team exercise needs an authorized external firm, a live deployed target, and a signed rules-of-engagement document — none of which exist in this sandbox (no live cluster, no deployed environment; see [09-roadmap.md](09-roadmap.md) Phase 7 for the same constraint noted against PERF-002/003/004). What *is* deliverable directly, and is captured here:
 
-1. **A real, current dependency vulnerability audit** (§23) — actual `pnpm audit` output against the live `vektor-platform` workspace lockfile, not a template.
+1. **A real, current dependency vulnerability audit** (§23) — actual `pnpm audit` output against the live `vektor-backend` workspace lockfile, not a template.
 2. **The engagement plan and rules of engagement** (§24) an external pentest firm or internal red team would execute against once a real environment exists.
 3. **A self-audit against the SEC-003 auth boundary this same phase built** (§25) — the closest thing to an actual authenticated-attack test achievable without a live deployment: real forged/tampered/wrong-role tokens thrown at the real `requireRole()` implementation.
 
@@ -18,7 +18,7 @@ This is a point-in-time snapshot (2026-08-26). Dependency advisories change dail
 
 ## 23. Dependency Vulnerability Audit (2026-08-26)
 
-### 23.1 `vektor-platform` (`pnpm audit`, live workspace lockfile)
+### 23.1 `vektor-backend` (`pnpm audit`, live workspace lockfile)
 
 | Severity | Count |
 |---|---|
@@ -44,7 +44,7 @@ Note: this is **not** `vektor-proto`'s own gRPC code path — per [ADR-0005](adr
 | `@fastify/static` (multiple advisories) | Path traversal / route-guard bypass via encoded separators / non-canonical URLs | Used by `map-tile-server` (serving PMTiles) and transitively by every service's new `@fastify/swagger-ui` registration (API-001, this phase). `map-tile-server` is the higher-risk instance — it serves from a real filesystem directory; confirm its static-file root is scoped correctly and upgrade before any public-facing deployment. |
 | `postcss`, `sharp`, `adm-zip`, `extract-zip`, `image-size` | Various DoS/path-traversal/file-read advisories | All build-tooling or image-processing transitive deps (`apps/web`'s Next.js toolchain, `reporting-svc`'s image handling). Lower priority — not on a path that processes untrusted external input directly in this codebase as currently built, but track for the next dependency-refresh pass. |
 
-**Full machine-readable output**: re-run `pnpm audit --json` from `vektor-platform/` — not checked into this doc since it's already stale the moment a new advisory publishes.
+**Full machine-readable output**: re-run `pnpm audit --json` from `vektor-backend/` — not checked into this doc since it's already stale the moment a new advisory publishes.
 
 ### 23.2 Other repos
 
@@ -71,10 +71,10 @@ For execution once a real staging or pre-production environment exists (not this
 ### 24.2 Test categories (mapped to this project's actual controls)
 
 1. **Authentication bypass** — forged/expired/wrong-algorithm JWTs against every `requireRole()`-gated endpoint; confirm §25's self-test results hold against the real deployed JWKS, not just the local-JWKS test fixture.
-2. **Authorization boundary** — a token for one role attempting every other role's endpoints (e.g., an `Analyst` token against `POST /api/v1/coa/:coa_id/approve`); confirm the "+"-tier semantics in [`roles.ts`](../vektor-platform/packages/auth/src/roles.ts) match the intended access model, not just that *some* check exists.
+2. **Authorization boundary** — a token for one role attempting every other role's endpoints (e.g., an `Analyst` token against `POST /api/v1/coa/:coa_id/approve`); confirm the "+"-tier semantics in [`roles.ts`](../vektor-backend/packages/auth/src/roles.ts) match the intended access model, not just that *some* check exists.
 3. **Injection** — prompt injection via sensor metadata/analyst notes into COA generation (Pitfall 4's `sanitizeForPrompt()`); SQL injection attempts against any raw `sql` fragment (audit for any future query that interpolates unescaped user input, given the `drizzle-orm` advisory in §23.1).
 4. **Data classification boundary** — confirm an `Analyst` token genuinely cannot reach `SuperAdmin`-only data (`GET /api/v1/audit`) even via a parameter-tampering or IDOR-style attempt against a resource ID.
-5. **Enclave isolation** — attempt lateral movement from a compromised `vektor-platform` pod into `vektor-ml-enclave` past the default-deny NetworkPolicy (§14.2, [ADR-0013](adr/0013-network-policy-default-deny.md)); attempt the same from a compromised enclave pod back out.
+5. **Enclave isolation** — attempt lateral movement from a compromised `vektor-backend` pod into `vektor-ml-enclave` past the default-deny NetworkPolicy (§14.2, [ADR-0013](adr/0013-network-policy-default-deny.md)); attempt the same from a compromised enclave pod back out.
 6. **Edge node** — attempt to extract credentials/data from a captured edge node once SEC-005 (LUKS full-disk encryption) exists; confirm the offline-sync intake queue doesn't leak unencrypted sensitive data to disk outside the encrypted volume.
 7. **Rate limiting / API key scoping** — once Persona 7's (Systems Integrator) scoped API-key flow exists, confirm key revocation and rate limits actually hold under a real attempted-abuse pattern.
 

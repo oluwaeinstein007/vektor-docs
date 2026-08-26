@@ -110,7 +110,7 @@ export type ClientToServerEvents = {
 ### 13.3 gRPC Interface (TS ↔ Python Boundary, defined in `vektor-proto`)
 
 ```protobuf
-// vektor-proto/llm.proto — consumed by coa-svc (vektor-platform) and llm-cloud-svc (vektor-ml)
+// vektor-proto/llm.proto — consumed by coa-svc (vektor-backend) and llm-cloud-svc (vektor-ml)
 syntax = "proto3";
 
 service LLMService {

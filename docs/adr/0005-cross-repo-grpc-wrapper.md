@@ -4,7 +4,7 @@
 
 ## Context
 
-`vektor-proto` is consumed from `vektor-platform` via `link:../../../vektor-proto` — a filesystem symlink, not a published package, in local dev. This means `vektor-proto` carries its own, entirely separate `node_modules` tree. `vektor-proto/src/generated/llm.ts` (ts-proto output) is built against *its own* `@grpc/grpc-js` install. When `coa-svc` (ML-010) imported `@grpc/grpc-js` directly and constructed `credentials.createInsecure()` to pass into a class from the generated code, grpc-js's internal `instanceof ChannelCredentials` check failed — even at the identical package version in both installs, they're two distinct module instances, and `instanceof` is instance-identity-sensitive. The failure mode wasn't consistent: a synchronous `TypeError` in one call context, a silent 0%-CPU hang in another (inside `node:test`'s runner).
+`vektor-proto` is consumed from `vektor-backend` via `link:../../../vektor-proto` — a filesystem symlink, not a published package, in local dev. This means `vektor-proto` carries its own, entirely separate `node_modules` tree. `vektor-proto/src/generated/llm.ts` (ts-proto output) is built against *its own* `@grpc/grpc-js` install. When `coa-svc` (ML-010) imported `@grpc/grpc-js` directly and constructed `credentials.createInsecure()` to pass into a class from the generated code, grpc-js's internal `instanceof ChannelCredentials` check failed — even at the identical package version in both installs, they're two distinct module instances, and `instanceof` is instance-identity-sensitive. The failure mode wasn't consistent: a synchronous `TypeError` in one call context, a silent 0%-CPU hang in another (inside `node:test`'s runner).
 
 ## Decision
 

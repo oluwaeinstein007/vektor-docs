@@ -42,9 +42,9 @@
 
 > **⚠️ PITFALL 3 — Cross-Repo Contract Drift**
 >
-> As `vektor-platform` and `vektor-ml` evolve independently, it's tempting to hand-edit a `.proto` copy locally instead of going through `vektor-proto`. This silently reintroduces the exact TS/Python drift problem the repo split was meant to prevent.
+> As `vektor-backend` and `vektor-ml` evolve independently, it's tempting to hand-edit a `.proto` copy locally instead of going through `vektor-proto`. This silently reintroduces the exact TS/Python drift problem the repo split was meant to prevent.
 >
-> **Mitigation:** `vektor-platform` and `vektor-ml` never vendor `.proto` files directly — both consume only the published `@vektor/proto` / `vektor-proto` packages, pinned by version. CI in both repos fails the build if a local `.proto` file is detected outside `vektor-proto`. Contract changes require a PR in `vektor-proto` with dual approval (§9.9) before either consuming repo can bump its dependency.
+> **Mitigation:** `vektor-backend` and `vektor-ml` never vendor `.proto` files directly — both consume only the published `@vektor/proto` / `vektor-proto` packages, pinned by version. CI in both repos fails the build if a local `.proto` file is detected outside `vektor-proto`. Contract changes require a PR in `vektor-proto` with dual approval (§9.9) before either consuming repo can bump its dependency.
 
 ---
 

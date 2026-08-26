@@ -69,7 +69,7 @@
 
 | Component | Technology | Purpose |
 |---|---|---|
-| Core monorepo tooling | Turborepo + pnpm workspaces | Unified build pipeline within `vektor-platform` |
+| Core monorepo tooling | Turborepo + pnpm workspaces | Unified build pipeline within each of `vektor-backend` and `vektor-web` |
 | Container Runtime | Docker | Service containerization |
 | Orchestration | Kubernetes / k3s (edge) | Production orchestration; lightweight edge runtime |
 | IaC | Terraform | Reproducible cloud + on-prem provisioning (`vektor-infra`) |

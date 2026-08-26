@@ -11,9 +11,9 @@
 | Role | Count | Primary Repo(s) |
 |---|---|---|
 | Engineering Lead / Architect | 1 | all |
-| Backend Engineers (TypeScript) | 5 | `vektor-platform` |
+| Backend Engineers (TypeScript) | 5 | `vektor-backend` |
 | ML Engineers (Python) | 3 | `vektor-ml` |
-| Frontend Engineers (Next.js) | 2 | `vektor-platform` (`apps/`) |
+| Frontend Engineers (Next.js) | 2 | `vektor-web` |
 | DevOps / Platform Engineers | 2 | `vektor-infra`, `vektor-edge` |
 | Security Engineer | 1 | `vektor-infra`, cross-repo audit |
 | Product Manager | 1 | — |

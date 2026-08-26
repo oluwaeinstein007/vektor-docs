@@ -10,7 +10,7 @@ Each file below is a self-contained slice of the original master PRD, split so a
 | 4–6 | Stakeholders & Team · User Types · Scope & Boundaries | [01-users-scope.md](01-users-scope.md) | The unified 7-user-type model (§5.1), all persona detail, v1.0 in/out of scope |
 | 7 | Functional Requirements (Epics) | [02-requirements.md](02-requirements.md) | Epics 1–9, every `REQ-x.x`, Phase 2 candidates |
 | 8 | Non-Functional Requirements | [03-nfr.md](03-nfr.md) | Performance, availability, scalability, security, usability, DX targets |
-| 9 | System Design & Repository Architecture | [04-system-design.md](04-system-design.md) | The 6-repo polyrepo layout, `vektor-proto` contract boundary, CI/CD topology, access control |
+| 9 | System Design & Repository Architecture | [04-system-design.md](04-system-design.md) | The 7-repo polyrepo layout, `vektor-proto` contract boundary, CI/CD topology, access control |
 | 10 | Tech Stack | [05-tech-stack.md](05-tech-stack.md) | Frontend, backend, AI/ML, storage, infra — by repo |
 | 11 | Hardware Architecture & Deployment | [06-hardware.md](06-hardware.md) | Cloud core, on-prem rack layout, edge node BOM, end-user devices |
 | 12–13 | Data Architecture · API Contracts | [07-data-api.md](07-data-api.md) | Entity schema, Drizzle/Kafka schemas, REST/WebSocket/gRPC contracts |
@@ -30,7 +30,8 @@ If you're working in a specific VEKTOR repo and want just the relevant spec:
 
 | Repo | Start with |
 |---|---|
-| `vektor-platform` | [02-requirements.md](02-requirements.md), [05-tech-stack.md](05-tech-stack.md), [07-data-api.md](07-data-api.md) |
+| `vektor-backend` | [02-requirements.md](02-requirements.md), [05-tech-stack.md](05-tech-stack.md), [07-data-api.md](07-data-api.md) |
+| `vektor-web` | [02-requirements.md](02-requirements.md) (Epic covering FE-xxx tasks), [09-roadmap.md](09-roadmap.md) Phase 1 |
 | `vektor-ml` | [04-system-design.md](04-system-design.md) §9.9, [05-tech-stack.md](05-tech-stack.md) §10.3, [08-security-compliance.md](08-security-compliance.md) §14.2 |
 | `vektor-proto` | [04-system-design.md](04-system-design.md) §9.4, [07-data-api.md](07-data-api.md) §13.3 |
 | `vektor-edge` | [06-hardware.md](06-hardware.md) §11.4, [09-roadmap.md](09-roadmap.md) Phase 6, [10-risks-pitfalls.md](10-risks-pitfalls.md) Pitfall 2 |

@@ -38,7 +38,7 @@
 | **RBAC** | Role-Based Access Control |
 | **SAR** | Synthetic Aperture Radar |
 | **SRT** | Secure Reliable Transport; low-latency video streaming protocol |
-| **Turborepo** | Monorepo build system managing task pipelines within `vektor-platform` |
+| **Turborepo** | Monorepo build system managing task pipelines within `vektor-backend` and `vektor-web` |
 | **vLLM** | Python library for high-throughput LLM serving; used only inside `vektor-ml` |
 | **@xenova/transformers** | Hugging Face Transformers.js; runs ONNX embedding models in Node.js |
 | **WGS 84** | World Geodetic System 1984; global coordinate reference system |

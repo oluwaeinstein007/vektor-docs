@@ -8,7 +8,7 @@
 
 ### 26.1 Tool
 
-`vektor-platform/packages/load-test` — a real Kafka producer/consumer pair, not a synthetic microbenchmark. The producer publishes genuine, schema-valid `AisPositionReport` messages (the exact shape and Zod schema `fusion-svc`'s real consumer validates against); the consumer runs every message through `AisPositionReport.parse()` — the real per-message validation cost, not skipped for a bigger number. It publishes to an isolated `loadtest.vektor.ais.position` topic rather than the real `dev.*` topics, specifically so it never injects synthetic load into a `fusion-svc` instance another session might have running against the shared dev dataset.
+`vektor-backend/packages/load-test` — a real Kafka producer/consumer pair, not a synthetic microbenchmark. The producer publishes genuine, schema-valid `AisPositionReport` messages (the exact shape and Zod schema `fusion-svc`'s real consumer validates against); the consumer runs every message through `AisPositionReport.parse()` — the real per-message validation cost, not skipped for a bigger number. It publishes to an isolated `loadtest.vektor.ais.position` topic rather than the real `dev.*` topics, specifically so it never injects synthetic load into a `fusion-svc` instance another session might have running against the shared dev dataset.
 
 ### 26.2 Result (2026-08-26, single shared Kafka broker, 6 partitions)
 
