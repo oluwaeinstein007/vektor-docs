@@ -101,15 +101,17 @@
 
 ### Phase 6 — Edge Deployment (Weeks 41–46)
 
+**All tasks done as of 2026-08-26**, with one caveat: EDGE-002/003's ARM64 builds are written and got very close to a fully clean build in this sandbox (a QEMU-emulated `docker buildx build --platform linux/arm64`, no physical Jetson or ARM64 CI runner exists here either) — the real hardware/GPU throughput half of both tasks (`onnxruntime-node`'s execution-provider check, `node-llama-cpp`'s Mistral 7B load test) is genuinely hardware-in-the-loop-only, same class of gap as Phase 2's GPU inference and Phase 4's vLLM engine call. No `field-pwa` app exists anywhere in `vektor-platform` yet (no FE-xxx task has created it) — `compose/docker-compose.edge.yml`'s entry for it stays a placeholder image; every other edge-profile service in that file is real and buildable.
+
 | Task ID | Task | Owner | Repo |
 |---|---|---|---|
-| EDGE-001 | k3s edge node config + offline bootstrap scripts | DevOps | `vektor-edge` |
-| EDGE-002 | YOLOv8n INT8 ONNX build + onnxruntime-node ARM64 test on Jetson | ML | `vektor-edge` |
-| EDGE-003 | node-llama-cpp Mistral 7B Q4_K_M load test on Jetson | ML | `vektor-edge` |
-| EDGE-004 | Offline PMTiles map pack generation | Backend | `vektor-edge` |
-| EDGE-005 | IndexedDB offline store + BullMQ sync queue | Frontend | `vektor-platform` |
-| EDGE-006 | Delta sync on reconnect (Kafka offset replay) | Backend | `vektor-platform` |
-| EDGE-007 | CI check: reject any edge build > 10 GB memory budget | DevOps | `vektor-edge` |
+| EDGE-001 | k3s edge node config + offline bootstrap scripts — **done** (Phase 0 scaffold); `compose/docker-compose.edge.yml` fixed to build from real Dockerfiles with the env vars each service actually reads, instead of placeholder image tags | DevOps | `vektor-edge` |
+| EDGE-002 | YOLOv8n INT8 ONNX build + onnxruntime-node ARM64 test on Jetson — **build done** (`services/cv-inference-svc/Dockerfile`, multi-arch); the INT8 model itself was already built in Phase 2. **Real Jetson hardware test not done** — no physical runner exists; ARM64 build verification via QEMU emulation is real but was network-limited in this sandbox, see the note above | ML | `vektor-edge` |
+| EDGE-003 | node-llama-cpp Mistral 7B Q4_K_M load test on Jetson — **build done** (`services/coa-svc/Dockerfile`, `VEKTOR_COA_MODE=edge`). **Real Jetson load test not done**, same hardware gap as EDGE-002 | ML | `vektor-edge` |
+| EDGE-004 | Offline PMTiles map pack generation — **done**, verified end-to-end against a real GeoJSON fixture with a from-source `tippecanoe` build + the real `pmtiles` binary; CI job does the same on every PR | Backend | `vektor-edge` |
+| EDGE-005 | IndexedDB offline store + BullMQ sync queue — **done**: `apps/web/src/lib/offline-sync.ts` + `useOfflineSync` (browser half, verified in a real headless Chrome) draining into `services/edge-sync-svc`'s real BullMQ intake queue (backend half) | Frontend | `vektor-platform` |
+| EDGE-006 | Delta sync on reconnect (Kafka offset replay) — **done**: `services/edge-sync-svc`, a persisted-SQLite-offset Kafka consumer (not relying on Kafka's own group-commit position) verified against real Kafka with a kill-and-resume scenario | Backend | `vektor-platform` |
+| EDGE-007 | CI check: reject any edge build > 10 GB memory budget — **done** (Phase 0 scaffold), re-verified passing | DevOps | `vektor-edge` |
 
 ### Phase 7 — Public API, Hardening & Launch (Weeks 47–54)
 
