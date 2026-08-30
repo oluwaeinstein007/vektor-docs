@@ -34,25 +34,31 @@ The deliberate misspelling of "Vector" (a word that is otherwise entirely descri
 
 ## Table of Contents
 
+This file only covers sections 1–3 (below) — the PRD was later split
+across files, one per remaining section; see
+[README.md](README.md) for the full map. The links below point at
+those files directly rather than same-page anchors, which is what they
+used to be before the split and have been broken ever since.
+
 1. [Executive Summary](#1-executive-summary)
 2. [Problem Statement](#2-problem-statement)
 3. [Goals & Success Metrics](#3-goals--success-metrics)
-4. [Stakeholders & Team](#4-stakeholders--team)
-5. [User Types](#5-user-types)
-6. [Scope & Boundaries](#6-scope--boundaries)
-7. [Functional Requirements (Epics)](#7-functional-requirements-epics)
-8. [Non-Functional Requirements](#8-non-functional-requirements)
-9. [System Design & Repository Architecture](#9-system-design--repository-architecture)
-10. [Tech Stack](#10-tech-stack)
-11. [Hardware Architecture & Deployment](#11-hardware-architecture--deployment)
-12. [Data Architecture & Core Models](#12-data-architecture--core-models)
-13. [API Contracts](#13-api-contracts)
-14. [Security, Compliance & Data Classification](#14-security-compliance--data-classification)
-15. [Development Roadmap](#15-development-roadmap)
-16. [Risk Register](#16-risk-register)
-17. [Known Engineering Pitfalls](#17-known-engineering-pitfalls)
-18. [Cost Model & Team Composition](#18-cost-model--team-composition)
-19. [Glossary](#19-glossary)
+4. [Stakeholders & Team](01-users-scope.md)
+5. [User Types](01-users-scope.md)
+6. [Scope & Boundaries](01-users-scope.md)
+7. [Functional Requirements (Epics)](02-requirements.md)
+8. [Non-Functional Requirements](03-nfr.md)
+9. [System Design & Repository Architecture](04-system-design.md)
+10. [Tech Stack](05-tech-stack.md)
+11. [Hardware Architecture & Deployment](06-hardware.md)
+12. [Data Architecture & Core Models](07-data-api.md)
+13. [API Contracts](07-data-api.md)
+14. [Security, Compliance & Data Classification](08-security-compliance.md)
+15. [Development Roadmap](09-roadmap.md)
+16. [Risk Register](10-risks-pitfalls.md)
+17. [Known Engineering Pitfalls](10-risks-pitfalls.md)
+18. [Cost Model & Team Composition](11-cost-team.md)
+19. [Glossary](12-glossary.md)
 
 ---
 

@@ -1,0 +1,35 @@
+# INFRA-008: this repo had no CI at all before this. A markdown-style
+# linter (markdownlint) was tried and rejected — its default config is pure
+# line-length noise against this repo's deliberately long prose lines and
+# wide tables, no real value. A link checker is worth it: run against every
+# .md file in this repo, it found (and this same pass fixed) two real
+# bugs — 00-vision.md's Table of Contents still pointed at same-page
+# anchors for sections that moved to their own files when the PRD was
+# split, and 14-sec004-security-audit.md linked across repos with a
+# relative path (../vektor-backend/...), which only "worked" by coincidence
+# in a local sibling-checkout layout and 404s on GitHub, where vektor-docs
+# and vektor-backend are separate repos.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  link-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install -g markdown-link-check@3.15.0
+      - name: Check every markdown file for dead links
+        run: |
+          fail=0
+          for f in $(find . -name "*.md" -not -path "./node_modules/*"); do
+            echo "== $f =="
+            markdown-link-check -q "$f" || fail=1
+          done
+          exit $fail
