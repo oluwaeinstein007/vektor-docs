@@ -6,7 +6,7 @@
 
 **This is a living, dated snapshot, not part of the original PRD numbering.** This project has been under continuous, often highly concurrent (dozens of parallel Claude Code sessions on the same checkout at peak) development well past its original Phase 0–7 roadmap. Reconstructing "what's actually true right now" from `09-roadmap.md` plus scattered session memory has repeatedly cost real time across sessions — this doc exists to make that a 2-minute read instead. **Update it whenever you land a nontrivial change**, and trust the date on whatever you're reading: a status doc is a snapshot, not a promise.
 
-*Last updated: 2026-09-14.*
+*Last updated: 2026-09-15.*
 
 ## Repo layout (current)
 
@@ -34,6 +34,7 @@
 - **`apps/field-pwa`** — a browser-based field client (GPS/gyro, optional browser-camera capture as an RTSP fallback) posting to `ingest-svc`'s field-ingest HTTP endpoint.
 - **Live camera feed panel** on the dashboard, fed by either a real RTSP source or field-pwa's browser-camera snapshots.
 - **Target Workbench UI + `@vektor/ui` design system** in `apps/web` (Phase 4's COA/threat-scoring backend never had a matching UI until this).
+- **Sensor registry + Sensor Coverage map layer** (2026-09-15) — `fusion-svc`'s `POST/GET /api/v1/sensors`/`DELETE /api/v1/sensors/:id` (REQ-1.8, Epic 1 — `docs/07-data-api.md` §13.1), the one requirements-table endpoint left unbuilt after Phase 1 closed. Registering a sensor now makes its `sensor:status` events carry real position/coverage-radius geometry, which the dashboard's "Sensor Coverage" layer renders as a client-side geodesic circle — previously a permanent no-op since Phase 1.
 - **In progress as of this writing**: real role-gated navigation + an Admin Console and Logistics Workspace screen in `apps/web`, being built by a concurrent session — check `git log` in `vektor-web` for current status before assuming it's done or not started.
 
 ## Bringing up a local dev stack
@@ -54,7 +55,6 @@ This checkout regularly has multiple (sometimes dozens of) concurrent Claude Cod
 
 - SEC-005 (edge full-disk encryption) — not attempted.
 - PERF-002/003/004 and real GPU/Jetson throughput generally — hardware-only, no such hardware exists in any sandbox this has been built in.
-- "Sensor Coverage" map layer checkbox is legend-only — `SensorHealth` carries no position/coverage-radius field, so it's a no-op today.
 - `field-pwa` didn't exist as an app until the device-integration work above — check its current state before assuming EDGE-001's `docker-compose.edge.yml` placeholder entry has been replaced with a real build.
 - `coa-svc`'s edge mode still needs a full Postgres+Qdrant despite §11.4's edge stack table only listing `better-sqlite3` — documented architecture gap, not fixed.
 - The 469MB GGUF test fixture in `coa-svc` exceeds GitHub's 100MB limit and was never actually made committable (needs Git LFS or exclusion) — flagged, not resolved.

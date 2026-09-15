@@ -41,6 +41,8 @@
 | FE-001 | Web dashboard: MapLibre GL base map + layer system — **done** | Frontend |
 | FE-002 | Web dashboard: Socket.io entity rendering — **done**: typed event contract matches §13.2 exactly, every inbound event Zod-validated at the socket boundary | Frontend |
 | FE-003 | Web dashboard: sensor health panel — **done**: live per-sensor status/latency/drop-rate, flags the REQ-1.8 >1% drop-rate threshold | Frontend |
+| SVC-007b | `fusion-svc`: `POST/GET /api/v1/sensors`, `DELETE /api/v1/sensors/:id` — REQ-1.8's sensor-registration endpoint (§13.1, `docs/07-data-api.md`), the one requirements-table row left unbuilt after Phase 1 closed — **done** 2026-09-15, backs the dashboard's Sensor Coverage map layer (see FE-00X below) | Backend |
+| FE-00X | Web dashboard: Sensor Coverage map layer — **done** 2026-09-15: geodesic coverage-circle rendering for any sensor with a registration on file, closing the permanent no-op the layer-legend checkbox had been since Phase 1 (`SensorHealth` carried no geometry until SVC-007b) | Frontend |
 
 ### Phase 2 — CV & Tracking Pipeline (Weeks 11–18)
 
