@@ -39,6 +39,7 @@ verified against real infrastructure rather than asserted:
 | `NW-013` decision-loop latency | **done** | New `@vektor/latency-harness`. Sensor→operator **p95 1155 ms tuned / 1965 ms default**, 25/25 received. G1 uses ~2–3% of its 60 s budget; NFR 8.1's 500 ms fusion target is **not** met |
 | `NW-014` map perf | **done** | New `apps/web/scripts/map-perf-bench.mjs` — real MapLibre in real headless Chrome, 100→5000 entities |
 | `NW-010` SEC-005 LUKS | **done by a peer session** | Delivered concurrently by session `vektor-2e` — 9 files in `vektor-edge`, verified against real cryptsetup 2.7.0/LUKS2. Found two genuine bugs on the way: k3s was bootstrapping without `--secrets-encryption` and onto a plaintext data dir |
+| `NW-018` historical playback | **done by a peer session** | Delivered by `vektor-2e`. New `entity_history` table (RANGE-partitioned by day), a Kafka projector, 4 `analyst+`-gated routes in `geospatial-svc`, and a time-slider + track layer in `apps/web`. 19 backend + 18 frontend tests; geospatial-svc 30/30 against real PostGIS |
 | `NW-011` licence | **done** | Open-core: Apache-2.0 on `vektor-proto`/`-edge`/`-infra`/`-docs`, BSL 1.1 (→ Apache-2.0 on 2030-10-16) on `-backend`/`-web`/`-ml`; 27 `package.json` files moved off `UNLICENSED` |
 
 ### Bugs found and fixed while doing the above
@@ -94,6 +95,49 @@ things, and all are fixed:
 11. **The `maildev` healthcheck I wrote was for 2.x.** 3.x serves health at
    `/api/healthz`, so the container sat permanently "unhealthy" while
    working perfectly.
+
+### NW-018's four silent-failure bugs (found by `vektor-2e`, recorded here because each one looked like success)
+
+Worth keeping because none of them raised an error — each produced
+plausible-looking wrong output:
+
+1. **`ST_SimplifyPreserveTopology` silently drops the M dimension**
+   (PostGIS 3.4.3; `ST_Zmflag` 1 → 0). Track decimation encodes each
+   point's timestamp in M so surviving vertices can be joined back to their
+   rows. With topology preservation every `ST_M()` returned NULL, the join
+   matched nothing, and an entity with 1,440 points returned an **empty
+   track**. `ST_Simplify` preserves M — topology preservation is a polygon
+   concern and a track is a LineString.
+2. **`ST_Length(ST_Envelope(geom))` is always 0.** An envelope is a
+   polygon, and `ST_Length` of a polygon is 0, not its perimeter. A derived
+   decimation tolerance built on it silently collapsed to its floor every
+   time.
+3. **Spatial DBSCAN over raw track points cannot find dwells** — and fails
+   in a way that looks reasonable. A moving entity is spatially dense along
+   its own path (at 14 km/h sampled every 10s, consecutive points are ~39 m
+   apart), so at any useful `eps` DBSCAN chains an entire journey into one
+   cluster whose centroid sits mid-transit, at a place the entity never
+   stopped. Measured: 1 cluster, 1 "visit", a 14,390-second dwell, centroid
+   near neither berth. The fix is stay-point detection — derive speed from
+   consecutive positions via `::geography`, flag stopped, gaps-and-islands,
+   then cluster the *run centroids* — which correctly returns 2 visits of
+   ~7,180s.
+4. **drizzle-orm's raw `sql` tag cannot bind a JS `Date`.** It passes
+   parameters to the `postgres` driver untouched and you get
+   `ERR_INVALID_ARG_TYPE ... Received an instance of Date` at bind time —
+   the same class as the array-parameter trap already documented in
+   `tests/app.test.ts`. Timestamps must go in as ISO strings with an
+   explicit `::timestamptz` cast. This was in production code, not tests.
+
+A design note worth carrying: the default decimation tolerance is a
+**display-resolution rule** (drop detail finer than one pixel at full-track
+zoom), not budget-derived. Budget-derived was tried and measured to be
+unworkable — sweeping the divisor returned 4 points at every tolerance from
+108 m down to 4.3 m, then 264 at 1.08 m, because the cliff is GPS jitter
+crossing the threshold. Output size is governed by sensor noise, not by the
+caller's budget, so a geometrically simple track legitimately returns far
+fewer points than `max_points`; `total_points`/`decimated` tell the operator
+what was dropped.
 
 ### Corrections to this document
 

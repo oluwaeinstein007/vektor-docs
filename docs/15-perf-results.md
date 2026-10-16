@@ -120,6 +120,65 @@ KEYCLOAK_TOKEN=$(./scripts/dev-stack.sh token Analyst) \
 
 ---
 
+## 26b. NW-014 — Map Render Performance (2026-10-16)
+
+NFR 8.1 commits to "≥ 60fps on WebGL map with 1,000+ active tracks". The
+dashboard had only ever been demonstrated with a handful of real entities.
+
+### 26b.1 Tool
+
+`vektor-web/apps/web/scripts/map-perf-bench.mjs`. Drives a real MapLibre GL
+map in a real headless Chrome (`playwright-core` against the system binary —
+the same no-bundled-browser pattern `reporting-svc` uses for
+`puppeteer-core`), with the **same three symbol layers and identical
+layout/paint expressions** as `src/components/entity-layer.tsx`, fed
+features in the exact shape `src/lib/entity-geojson.ts` emits. It sweeps
+entity counts, drives a continuous pan/zoom so every frame is a real
+re-render, and reports mean/p95 frame times.
+
+It is a layer-level benchmark, not a full-dashboard one — no Next.js, no
+Socket.io, no HUD panels. That is deliberate: NFR 8.1 asks whether MapLibre
+can render N entity symbols at 60fps with this project's symbology, and
+mixing React re-render cost in would answer a different question.
+
+### 26b.2 This environment cannot answer the question
+
+No GPU is exposed to headless Chrome here, so WebGL runs on SwiftShader, a
+software rasteriser. The measured result at only **250 entities** was
+**2.9 fps mean, 1.6 fps p95, worst frame 1367 ms** — far below 60fps at a
+quarter of the target load, on a renderer that is one to two orders of
+magnitude slower than real hardware.
+
+**That number says nothing about NFR 8.1.** It measures SwiftShader, not
+the symbology. NW-014 therefore joins PERF-002/003/004 as
+hardware-blocked: the tool is written, verified to drive the real code
+path, and ready to produce a meaningful figure the moment it runs on a
+machine with a GPU. Running it is a five-minute job for whoever has one.
+
+### 26b.3 One finding that does not need a GPU
+
+Both icon layers in `entity-layer.tsx` set:
+
+```ts
+"icon-allow-overlap": true,
+"icon-ignore-placement": true,
+```
+
+This disables MapLibre's symbol collision detection, so **every symbol is
+rendered with no culling** — there is no mechanism by which 1,000 tracks
+cost less than 1,000 draws, however they are distributed on screen. It is
+the right choice for a tactical display (an operator must not have tracks
+silently hidden because they overlap), and it is also the single thing most
+likely to decide whether the 1,000-track target is met. Whoever runs this on
+real hardware should measure with and without it, and if the target is
+missed, the options are symbol clustering at low zoom, a custom WebGL layer,
+or restating the NFR.
+
+The text label layer already sets `"text-allow-overlap": false` with
+`"text-optional": true`, so labels do cull — only the icons do not.
+
+---
+
 ## 27. PERF-002/003/004 — Hardware-Dependent Benchmarks (Not Runnable in This Sandbox)
 
 Consistent with every prior phase's honest treatment of the same constraint (Phase 2's `onnxruntime-node` GPU path, Phase 4's `vllm` engine construction, Phase 6's ARM64 build gap — see [10-risks-pitfalls.md](10-risks-pitfalls.md) and the Phase 6 roadmap note):
