@@ -29,6 +29,97 @@ Across every run, **total consumed count lagged total produced count** even with
 
 ---
 
+## 26a. NW-013 — Sensor-to-Operator Latency (2026-10-16)
+
+G1 ("sensor-to-decision latency < 60 seconds") is the product's headline
+claim and nothing had ever measured it. Every component had been timed in
+isolation; the composed path had not.
+
+### 26a.1 Tool and scope
+
+`vektor-backend/packages/latency-harness`. A real `AisPositionReport` is
+produced to `dev.vektor.ais.position`; a **live `fusion-svc`** consumes it
+through the full production path (Redis Streams event-time watermark
+window, 6-state EKF, cross-sensor correlation, ontology mapping,
+no-strike-zone check, Postgres upsert); a real `socket.io-client`
+authenticated with a real Keycloak token receives the fused `Entity`. No
+stub anywhere. Each probe carries a unique `sensor_id` which `fusion-svc`
+carries through to the Entity's `source_sensors`, so a received entity maps
+back to exactly the message that produced it rather than being matched by
+timestamp.
+
+**The COA leg is deliberately excluded.** `coa-svc` needs a live Qdrant with
+a populated doctrine collection plus either a cloud gRPC LLM or a local
+GGUF, and its latency is dominated by model inference on hardware this
+project has never had (PERF-003/004). The figures below are therefore a
+**lower bound on G1**.
+
+### 26a.2 Results
+
+25 samples per run, against the `compose/docker-compose.dev.yml` stack on a
+developer laptop with eleven service images building concurrently in the
+background — so these are pessimistic, not best-case.
+
+| Configuration | min | mean | p50 | p95 | received |
+|---|---|---|---|---|---|
+| Defaults (`WATERMARK_MS=500`, `POLL_BLOCK_MS=1000`) | 1488 ms | 1914 ms | 1934 ms | **1965 ms** | 25/25 |
+| Tuned (`WATERMARK_MS=100`, `POLL_BLOCK_MS=50`) | 1013 ms | 1085 ms | 1108 ms | **1155 ms** | 25/25 |
+
+Probe-rate sensitivity, tuned configuration, 10 samples each:
+
+| Probe interval | min | p95 |
+|---|---|---|
+| 300 ms | 1773 ms | 1915 ms |
+| 1000 ms | 1013 ms | 1155 ms |
+| 3000 ms | 1132 ms | 1349 ms |
+
+### 26a.3 What this means
+
+**G1 is comfortably met on this leg.** At p95 the sensor-to-operator path
+consumes **1.9–3.3% of the 60-second budget**. Even allowing the edge COA
+target of 30 seconds (NFR 8.1) for the decision leg, G1 has very large
+headroom. This is the first real evidence for the product's central claim.
+
+**NFR 8.1's "track fusion latency < 500ms" is NOT met**, and the reason is
+worth stating precisely because most of it is policy, not slowness:
+
+- ~1450 ms of the default-configuration figure is two deliberate constants:
+  `WATERMARK_MS` (500) and `POLL_BLOCK_MS` (1000). The watermark exists to
+  satisfy Pitfall 1 — never order by arrival time — and trading it away
+  trades away correctness under sensor clock skew. Tuning both down removed
+  almost exactly that much.
+- A **~1 second floor remains after tuning**, and it is real rather than a
+  measurement artifact: it does not shrink when probes are spaced three
+  seconds apart. It is not the watermark (controlled for) and not the
+  pipeline poll loop (`POLL_BLOCK_MS=50`), which localises it to the
+  Kafka-consume-to-Redis-stream hop. `fusion-svc` constructs its consumer as
+  `kafka.consumer({ groupId: "fusion-svc" })` with no `maxWaitTimeInMs`
+  override, so kafkajs's defaults apply. **Confirming that is the obvious
+  next step and was not done here.**
+- **Latency degrades as input rate rises** — 1773 ms min at 300 ms spacing
+  versus 1013 ms at 1000 ms. The pipeline is a single serialized
+  `while (running) { await runPipelineOnce(...) }` loop, so arrivals queue
+  behind one another. PERF-001 measured raw *ingestion* throughput at ~9,889
+  events/sec, which is a different thing from the fused-entity path measured
+  here; nothing has yet measured fusion throughput under sustained load.
+
+Three follow-ups fall out of this, none of them blocking: identify the
+remaining ~1s consumer-side floor; decide whether NFR 8.1's 500 ms target is
+achievable at all with a correctness-preserving watermark, or whether the
+NFR should be restated as "500 ms of processing after the watermark closes";
+and measure the fusion path under sustained rate rather than single probes.
+
+### 26a.4 Reproducing
+
+```sh
+pnpm stack:up
+# start fusion-svc with the stack's env (see compose/.env.example)
+KEYCLOAK_TOKEN=$(./scripts/dev-stack.sh token Analyst) \
+  pnpm --filter @vektor/latency-harness run
+```
+
+---
+
 ## 27. PERF-002/003/004 — Hardware-Dependent Benchmarks (Not Runnable in This Sandbox)
 
 Consistent with every prior phase's honest treatment of the same constraint (Phase 2's `onnxruntime-node` GPU path, Phase 4's `vllm` engine construction, Phase 6's ARM64 build gap — see [10-risks-pitfalls.md](10-risks-pitfalls.md) and the Phase 6 roadmap note):

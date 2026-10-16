@@ -6,7 +6,9 @@
 
 **This is a living, dated snapshot, not part of the original PRD numbering.** This project has been under continuous, often highly concurrent (dozens of parallel Claude Code sessions on the same checkout at peak) development well past its original Phase 0–7 roadmap. Reconstructing "what's actually true right now" from `09-roadmap.md` plus scattered session memory has repeatedly cost real time across sessions — this doc exists to make that a 2-minute read instead. **Update it whenever you land a nontrivial change**, and trust the date on whatever you're reading: a status doc is a snapshot, not a promise.
 
-*Last updated: 2026-09-15.*
+*Last updated: 2026-10-16.*
+
+**Looking for what to do next, rather than what exists?** [17-next-work.md](17-next-work.md) is the post-roadmap backlog, [18-use-cases.md](18-use-cases.md) ranks the candidate markets, and [19-commercialization.md](19-commercialization.md) covers licensing, pricing and the path to first revenue (all three written 2026-10-16).
 
 ## Repo layout (current)
 
@@ -39,9 +41,19 @@
 
 ## Bringing up a local dev stack
 
-No single docker-compose bundles the full cloud-profile stack (only `vektor-edge/compose/docker-compose.edge.yml`, which is edge-profile only). Bring up infra containers individually — every service's own README has the exact `docker run` invocation for what it needs (Kafka: KRaft mode, `apache/kafka:3.9.0`; Redis: `redis:7-alpine`; Postgres: `postgis/postgis:16-3.4-alpine`; Qdrant: `qdrant/qdrant:latest`), then `pnpm build && pnpm start`/`pnpm dev` per service with the right env vars.
+**Updated 2026-10-16 (NW-003): there is now a cloud-profile compose stack.** From `vektor-backend/`:
 
-**As of 2026-09-15, `fusion-svc` refuses to start without `KEYCLOAK_JWKS_URI` set** — `packages/auth`'s `authOptionsFromEnv()` throws at startup if it's unset (`GET /api/v1/sensors` etc. are now real-RBAC-gated, not just flagged as a gap). For local dev, don't stand up real Keycloak: run the dev-only auth bridge instead (`pnpm --filter @vektor/auth dev:auth-bridge` from `vektor-backend/`, serves `http://localhost:4477/certs`) and point `KEYCLOAK_JWKS_URI=http://localhost:4477/certs` at it. See `vektor-web/apps/web/README.md`'s auth-bridge section for the matching frontend-side setup (mint a token via `/settings` → "Mint via dev bridge"). Never point a real `KEYCLOAK_JWKS_URI` at this bridge outside local development. `blueforce/routes.ts` (blue-force-assets, no-strike-zones) does not have this gate yet — flagged, not fixed, as of this writing.
+```sh
+pnpm stack:up          # core: postgis, kafka, redis, keycloak, maildev, mosquitto, mediamtx
+pnpm stack:up:full     # + qdrant, routing-postgres, erp-postgres, debezium
+cp compose/.env.example .env && set -a && . ./.env && set +a
+```
+
+`stack:up` starts the containers, waits for every healthcheck, and applies the Drizzle migrations. Host ports are deliberately unusual (postgres 15432, kafka 19092, redis 16379, keycloak 18080) because every port the service READMEs document was already taken by unrelated projects on a shared dev box — see `vektor-backend/compose/README.md`, which also records the four real bring-up bugs this surfaced and fixed. The old advice (bring each container up by hand from its service README) still works but is no longer necessary.
+
+The compose stack runs a **real Keycloak** with the six §5.1 roles and one user per role imported (`pnpm stack:token Commander` prints a real access token), so the dev-auth-bridge route below is now the lighter alternative rather than the only option.
+
+**As of 2026-09-15, `fusion-svc` refuses to start without `KEYCLOAK_JWKS_URI` set** — `packages/auth`'s `authOptionsFromEnv()` throws at startup if it's unset (`GET /api/v1/sensors` etc. are now real-RBAC-gated, not just flagged as a gap). For local dev, don't stand up real Keycloak: run the dev-only auth bridge instead (`pnpm --filter @vektor/auth dev:auth-bridge` from `vektor-backend/`, serves `http://localhost:4477/certs`) and point `KEYCLOAK_JWKS_URI=http://localhost:4477/certs` at it. See `vektor-web/apps/web/README.md`'s auth-bridge section for the matching frontend-side setup (mint a token via `/settings` → "Mint via dev bridge"). Never point a real `KEYCLOAK_JWKS_URI` at this bridge outside local development. ~~`blueforce/routes.ts` (blue-force-assets, no-strike-zones) does not have this gate yet~~ — **fixed 2026-10-16 (NW-005)**: all seven blue-force/no-strike routes are now gated (reads `all`, writes `commander`), `vektor-web`'s no-strike layer switched from a bare `fetch` to the authenticated client, and four new tests cover it. Every route surface in the repo is now behind `requireRole()`.
 
 **Real gotcha, confirmed 2026-09-14**: dev infra containers persist across sessions (`docker start`, not `docker run`, once they already exist) — but a persisted Postgres data volume keeps whatever password it was *first* initialized with; `POSTGRES_PASSWORD` on a later `docker run`/`docker start` is silently ignored. If a service gets `password authentication failed` over its TCP `DATABASE_URL` connection while a `docker exec <container> psql` sanity check works fine, that's why — `psql` via `docker exec` hits pg_hba.conf's `local`/`127.0.0.1`/`::1` `trust` rule (no password check at all, a false-negative test), while any TCP connection from the host's Docker bridge IP hits a real `scram-sha-256` check. Fix once, at the container: `docker exec <container> psql -U postgres -d vektor -c "ALTER USER postgres WITH PASSWORD '<whatever every service's DATABASE_URL already assumes>';"`.
 
@@ -59,4 +71,5 @@ This checkout regularly has multiple (sometimes dozens of) concurrent Claude Cod
 - PERF-002/003/004 and real GPU/Jetson throughput generally — hardware-only, no such hardware exists in any sandbox this has been built in.
 - `field-pwa` didn't exist as an app until the device-integration work above — check its current state before assuming EDGE-001's `docker-compose.edge.yml` placeholder entry has been replaced with a real build.
 - `coa-svc`'s edge mode still needs a full Postgres+Qdrant despite §11.4's edge stack table only listing `better-sqlite3` — documented architecture gap, not fixed.
-- The 469MB GGUF test fixture in `coa-svc` exceeds GitHub's 100MB limit and was never actually made committable (needs Git LFS or exclusion) — flagged, not resolved.
+- ~~The 469MB GGUF test fixture in `coa-svc` exceeds GitHub's 100MB limit~~ — **not actually open** (verified 2026-10-16): it is committed as a 134-byte Git LFS pointer, `.gitattributes` carries `*.gguf filter=lfs`, and `git lfs fsck` is clean against the pushed remote.
+- **New as of 2026-10-16**: every service now has a Dockerfile (was 3 of 12), a `release-images.yml` workflow publishes them to GHCR, all seven repos carry a licence (open-core: Apache-2.0 / BSL 1.1), and `pnpm test:coverage` measures coverage for the first time. See [17-next-work.md](17-next-work.md)'s status section for what landed and the seven latent bugs it surfaced.

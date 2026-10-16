@@ -24,6 +24,9 @@ Each file below is a self-contained slice of the original master PRD, split so a
 | 26–27 | Phase 7 Performance Benchmark Results | [15-perf-results.md](15-perf-results.md) | PERF-001's real measured Kafka throughput; PERF-002/003/004's hardware-availability gap |
 | — | Architecture Decision Records | [adr/](adr/README.md) | DOC-002/R-011: why each major implementation-time decision was made, not just what the pitfall was |
 | — | **Current System Status** | [16-system-status.md](16-system-status.md) | **Start here.** A dated, living snapshot of what's actually built/verified today, beyond the original Phase 0–7 roadmap — how to bring up a local dev stack, known gaps, multi-session coordination notes |
+| — | **Next Work: Tasks & Features** | [17-next-work.md](17-next-work.md) | The post-roadmap backlog: `NW-xxx` tasks tiered by what unblocks what, from "nothing ships until this is done" to the features that open new markets |
+| — | **Use Cases & Target Markets** | [18-use-cases.md](18-use-cases.md) | What VEKTOR can verifiably do today, eight candidate verticals ranked by fit, and which wedge to lead with |
+| — | **Commercialization & Path to Revenue** | [19-commercialization.md](19-commercialization.md) | Licensing decision, pricing unit and packaging, revenue lines beyond the licence, and a staged path from zero customers to repeatable |
 
 ## Repo-to-doc quick reference
 

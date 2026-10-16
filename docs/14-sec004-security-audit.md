@@ -16,6 +16,63 @@ This is a point-in-time snapshot (2026-08-26). Dependency advisories change dail
 
 ---
 
+## 23a. Re-audit (2026-10-16, NW-009)
+
+**This supersedes §23's counts below.** §23 was last measured 2026-08-29. By
+2026-10-16 the same lockfile had drifted to **4 critical / 48 high / 30
+moderate / 4 low**, purely from new disclosures against unchanged
+dependencies — a good illustration of why a point-in-time audit in a
+document is worth very little on its own.
+
+What was done:
+
+1. **Direct dependencies updated within their existing semver ranges**
+   (`fastify`, `@fastify/static`, `sharp`, `@grpc/grpc-js`) → 3 critical /
+   41 high / 27 moderate / 3 low.
+2. **`nodemailer` bumped ^9 → ^10.0.6** in `alert-svc` and `reporting-svc`.
+   A major bump, so it was verified rather than assumed: `alert-svc`'s
+   16/16 suite passes, including the test that sends a real message through
+   a real SMTP server and reads it back.
+3. **A 13-entry `pnpm.overrides` block** in `vektor-backend/package.json`
+   for transitive advisories with a published fix and no direct dependency
+   of ours to bump: `protobufjs`, `simple-git`, `@simple-git/argv-parser`,
+   `@fastify/static`, `adm-zip`, `basic-ftp`, `brace-expansion`,
+   `engine.io`, `fast-uri`, `image-size`, `js-yaml`, `sharp`, `undici`.
+
+**Result: 0 critical / 2 high / 6 moderate / 0 low.**
+
+The 2 remaining high findings are both `extract-zip`, reached via
+`reporting-svc > puppeteer-core > @puppeteer/browsers > extract-zip`. Its
+advisory reports a patched range of `<0.0.0` — **no fixed version exists**.
+It cannot be closed by pinning, only by `puppeteer-core` dropping or
+replacing the dependency. It is explicitly allow-listed in the new CI audit
+job rather than silently ignored.
+
+**One real regression was caused and fixed during this work**, worth
+recording because it will recur: bumping `@grpc/grpc-js` in `vektor-backend`
+desynced it from `vektor-proto`, which still resolved 1.14.4 against its own
+stale lockfile despite declaring `^1.14.6`. Two copies of the library meant
+two non-identical `ServerUnaryCall` types, and `coa-svc` failed to compile
+with `TS2322 ... not assignable to UntypedHandleCall`. This is the
+cross-repo gRPC class-identity pitfall ADR/convention notes already warn
+about, reached by a new route. Fixed by updating `vektor-proto`'s lockfile
+so both repos resolve 1.14.6. **Any future `@grpc/grpc-js` change must be
+applied to both repos together.**
+
+Verification after all of the above: `pnpm build` 19/19 and `pnpm lint`
+25/25 clean, and 100 tests pass across the seven suites runnable in this
+environment (`fusion-svc` 41, `alert-svc` 16, `reporting-svc` 11,
+`geospatial-svc` 11, `audit-svc` 10, `map-tile-server` 6, `packages/auth` 5).
+`cv-inference-svc`, `coa-svc` and `edge-sync-svc` were not run — their
+native dependencies could not be installed here.
+
+**A CI job now enforces this.** `.github/workflows/ci.yml`'s `audit` job
+runs `pnpm audit --audit-level high` on every PR and push and fails the
+build on any high or critical finding outside the allow-list. The numbers in
+this document should never again be seven weeks old.
+
+---
+
 ## 23. Dependency Vulnerability Audit (2026-08-26)
 
 ### 23.1 `vektor-backend` (`pnpm audit`, live workspace lockfile)
