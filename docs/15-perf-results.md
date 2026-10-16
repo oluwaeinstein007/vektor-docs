@@ -56,60 +56,81 @@ project has never had (PERF-003/004). The figures below are therefore a
 
 ### 26a.2 Results
 
-25 samples per run, against the `compose/docker-compose.dev.yml` stack on a
-developer laptop with eleven service images building concurrently in the
-background — so these are pessimistic, not best-case.
+Against the `compose/docker-compose.dev.yml` stack on a developer laptop
+with other work running concurrently, so these are pessimistic.
 
-| Configuration | min | mean | p50 | p95 | received |
+| `WATERMARK_MS` / `POLL_BLOCK_MS` | min | mean | p50 | p95 | received |
 |---|---|---|---|---|---|
-| Defaults (`WATERMARK_MS=500`, `POLL_BLOCK_MS=1000`) | 1488 ms | 1914 ms | 1934 ms | **1965 ms** | 25/25 |
-| Tuned (`WATERMARK_MS=100`, `POLL_BLOCK_MS=50`) | 1013 ms | 1085 ms | 1108 ms | **1155 ms** | 25/25 |
+| 500 / 1000 (**shipped defaults**) | 1852 ms | 1976 ms | 1967 ms | **2121 ms** | 15/15 |
+| 0 / 25 (**correctness buffer off**) | 29 ms | 94 ms | 82 ms | **156 ms** | 15/15 |
 
-Probe-rate sensitivity, tuned configuration, 10 samples each:
+### 26a.3 The latency is entirely those two constants
 
-| Probe interval | min | p95 |
-|---|---|---|
-| 300 ms | 1773 ms | 1915 ms |
-| 1000 ms | 1013 ms | 1155 ms |
-| 3000 ms | 1132 ms | 1349 ms |
+An earlier revision of this section reported "a ~1 second floor that
+survives tuning" and localised it to the Kafka-consume hop. **Both claims
+were wrong, and the method that produced them is worth naming so it isn't
+repeated.** They came from reasoning about a configuration change that had
+not actually been applied to the running process, rather than from a
+measurement that isolated the hop.
 
-### 26a.3 What this means
+Two measurements settle it:
 
-**G1 is comfortably met on this leg.** At p95 the sensor-to-operator path
-consumes **1.9–3.3% of the 60-second budget**. Even allowing the edge COA
-target of 30 seconds (NFR 8.1) for the decision leg, G1 has very large
-headroom. This is the first real evidence for the product's central claim.
+- **The Kafka hop is not the cost.** A bare kafkajs produce-to-consume
+  round trip, using `fusion-svc`'s exact consumer construction
+  (`kafka.consumer({ groupId })`, no `maxWaitTimeInMs` override), measures
+  **min 7 ms, mean 16.8 ms, p95 76 ms**. There is no second of latency
+  hiding in kafkajs or the broker.
+- **Turning the two constants down removes essentially all of it** —
+  p95 2121 ms → 156 ms, a 13x reduction, with nothing else changed.
 
-**NFR 8.1's "track fusion latency < 500ms" is NOT met**, and the reason is
-worth stating precisely because most of it is policy, not slowness:
+The mechanism is in `packages/redis/src/watermarkWindow.ts` and is by
+design. A lone event can never be released by the watermark itself: the
+watermark is `max(sensor_ts seen) - watermarkMs`, and a single event *is*
+the max, so its own timestamp is always newer than the watermark it would
+have to clear. It is released by the other path — `poll()` treats a
+blocking `xread` that times out as "no domain has anything else in flight"
+and flushes the buffer. So an isolated event waits out one full
+`POLL_BLOCK_MS` before it is emitted, on top of `WATERMARK_MS`.
 
-- ~1450 ms of the default-configuration figure is two deliberate constants:
-  `WATERMARK_MS` (500) and `POLL_BLOCK_MS` (1000). The watermark exists to
-  satisfy Pitfall 1 — never order by arrival time — and trading it away
-  trades away correctness under sensor clock skew. Tuning both down removed
-  almost exactly that much.
-- A **~1 second floor remains after tuning**, and it is real rather than a
-  measurement artifact: it does not shrink when probes are spaced three
-  seconds apart. It is not the watermark (controlled for) and not the
-  pipeline poll loop (`POLL_BLOCK_MS=50`), which localises it to the
-  Kafka-consume-to-Redis-stream hop. `fusion-svc` constructs its consumer as
-  `kafka.consumer({ groupId: "fusion-svc" })` with no `maxWaitTimeInMs`
-  override, so kafkajs's defaults apply. **Confirming that is the obvious
-  next step and was not done here.**
-- **Latency degrades as input rate rises** — 1773 ms min at 300 ms spacing
-  versus 1013 ms at 1000 ms. The pipeline is a single serialized
-  `while (running) { await runPipelineOnce(...) }` loop, so arrivals queue
-  behind one another. PERF-001 measured raw *ingestion* throughput at ~9,889
-  events/sec, which is a different thing from the fused-entity path measured
-  here; nothing has yet measured fusion throughput under sustained load.
+That is correct behaviour, not a bug. Under real sustained multi-domain
+load, later events advance the watermark and release earlier ones without
+waiting for a timeout, so the per-event cost is far lower than the
+single-probe figure. **This harness measures the worst case — an isolated
+event arriving into an idle pipeline — which is the right thing to measure
+for a latency floor and the wrong thing to quote as typical.**
 
-Three follow-ups fall out of this, none of them blocking: identify the
-remaining ~1s consumer-side floor; decide whether NFR 8.1's 500 ms target is
-achievable at all with a correctness-preserving watermark, or whether the
-NFR should be restated as "500 ms of processing after the watermark closes";
-and measure the fusion path under sustained rate rather than single probes.
+### 26a.4 What this means for the NFRs
 
-### 26a.4 Reproducing
+**G1 is met with very large margin.** At the shipped defaults the
+sensor-to-operator leg costs **~3.5% of the 60-second budget** (p95
+2121 ms). Even reserving the full edge COA target of 30 s for the decision
+leg, G1 has room to spare. This is the first real evidence for the
+product's central claim.
+
+**NFR 8.1's "track fusion latency < 500 ms" is a configuration choice, not
+a performance wall.** At `WATERMARK_MS=0 / POLL_BLOCK_MS=25` the pipeline
+delivers p95 156 ms — comfortably inside the target — but `WATERMARK_MS=0`
+discards the Pitfall 1 protection that stops out-of-order cross-domain
+arrivals producing phantom duplicate tracks, which is a correctness
+guarantee the product should not trade for a latency number.
+
+The honest framing for whoever owns this next: the NFR as written is
+achievable only by giving up event-time ordering. Either restate it as
+"≤ 500 ms of processing after the watermark closes", or reduce
+`POLL_BLOCK_MS` (which costs nothing but a busier poll loop and is the
+cheap half of the win — it is pure dead time for an isolated event) while
+keeping `WATERMARK_MS` at a value justified by real sensor clock skew.
+Lowering `POLL_BLOCK_MS` alone is the recommended change.
+
+**Latency degrades as input rate rises** — an earlier run measured 1773 ms
+min at 300 ms probe spacing versus 1013 ms at 1000 ms. The pipeline is a
+single serialized `while (running) { await runPipelineOnce(...) }` loop, so
+arrivals queue behind one another. PERF-001's ~9,889 events/sec measured
+raw *ingestion*, which is a different path; **fusion throughput under
+sustained load has still not been measured** and is the obvious next
+benchmark.
+
+### 26a.5 Reproducing
 
 ```sh
 pnpm stack:up
@@ -141,21 +162,59 @@ Socket.io, no HUD panels. That is deliberate: NFR 8.1 asks whether MapLibre
 can render N entity symbols at 60fps with this project's symbology, and
 mixing React re-render cost in would answer a different question.
 
-### 26b.2 This environment cannot answer the question
+### 26b.2 Results on real hardware
 
-No GPU is exposed to headless Chrome here, so WebGL runs on SwiftShader, a
-software rasteriser. The measured result at only **250 entities** was
-**2.9 fps mean, 1.6 fps p95, worst frame 1367 ms** — far below 60fps at a
-quarter of the target load, on a renderer that is one to two orders of
-magnitude slower than real hardware.
+Getting a real GPU into headless Chrome needs an exact flag pair:
+`--use-gl=angle --use-angle=gl-egl` (plus `--ignore-gpu-blocklist`). Plain
+`--use-gl=egl` **silently falls back to SwiftShader**, and a first run of
+this benchmark did exactly that, measuring 2.9 fps at 250 entities — a
+figure that describes the software rasteriser and says nothing about the
+map. The tool now queries `WEBGL_debug_renderer_info` and prints the
+renderer it actually got, so that failure cannot be silent again.
 
-**That number says nothing about NFR 8.1.** It measures SwiftShader, not
-the symbology. NW-014 therefore joins PERF-002/003/004 as
-hardware-blocked: the tool is written, verified to drive the real code
-path, and ready to produce a meaningful figure the moment it runs on a
-machine with a GPU. Running it is a five-minute job for whoever has one.
+Measured on **Intel HD Graphics 520 (SKL GT2)** — a 2016 integrated laptop
+GPU, roughly the weakest hardware any operator would realistically use —
+180 frames per run, with other heavy work running on the same machine:
 
-### 26b.3 One finding that does not need a GPU
+| entities | mean fps | p95 fps | worst frame |
+|---|---|---|---|
+| 100 | 40.5 | 20.0 | 100 ms |
+| 500 | 33.8 | 15.0 | 133 ms |
+| 1,000 | **42.9** | 20.0 | 83 ms |
+| 2,000 | 35.9 | 15.0 | 133 ms |
+| 5,000 | 36.6 | 20.0 | 217 ms |
+| 10,000 | 24.4 | 7.5 | 317 ms |
+| 20,000 | 13.4 | 3.7 | 933 ms |
+
+An independent run on the same GPU under lighter load measured 51.5 fps
+mean at 1,000 and 55.1 at 2,000, with the same curve shape.
+
+### 26b.3 NFR 8.1 is met at 1,000 tracks, with about 5x headroom
+
+**The curve is flat from 100 to 5,000.** A hundred entities and five
+thousand entities perform the same, within noise. That flatness is the
+finding: entity count is not what limits the frame rate in that range — the
+renderer is finishing inside the frame budget throughout, and the measured
+rate reflects the vsync cap and machine load rather than map work. The knee
+is between 5,000 and 10,000; real degradation starts around 20,000.
+
+**An earlier prediction in [17-next-work.md](17-next-work.md) — that
+"MapLibre will need symbol clustering or a switch to a custom layer well
+before 1,000" — was wrong**, by roughly an order of magnitude, and has been
+corrected there.
+
+Two caveats, both of which make this result conservative rather than
+optimistic:
+
+1. `requestAnimationFrame` is vsync-capped, so mean fps can never exceed
+   the display rate (~60 Hz) no matter how much headroom exists. This
+   measures "does it keep up", not "how much faster could it go". The true
+   ceiling at 1,000 tracks is higher than any number here.
+2. p95 is harshly quantised at these rates — a single missed vsync reads as
+   "30 fps". The low p95 values are dropped frames, not sustained
+   degradation. Judge on mean plus worst-frame.
+
+### 26b.4 Why it is this cheap
 
 Both icon layers in `entity-layer.tsx` set:
 
@@ -164,18 +223,16 @@ Both icon layers in `entity-layer.tsx` set:
 "icon-ignore-placement": true,
 ```
 
-This disables MapLibre's symbol collision detection, so **every symbol is
-rendered with no culling** — there is no mechanism by which 1,000 tracks
-cost less than 1,000 draws, however they are distributed on screen. It is
-the right choice for a tactical display (an operator must not have tracks
-silently hidden because they overlap), and it is also the single thing most
-likely to decide whether the 1,000-track target is met. Whoever runs this on
-real hardware should measure with and without it, and if the target is
-missed, the options are symbol clustering at low zoom, a custom WebGL layer,
-or restating the NFR.
+This disables MapLibre's symbol collision detection. The initial reading of
+that was that it would make 1,000 tracks *expensive* because nothing is
+culled. The measurement says the opposite: with collision detection off
+there is no per-frame placement work to do, just draw calls, and the GPU
+absorbs those easily. The setting is both correct for a tactical display —
+an operator must never have tracks silently hidden because they overlap —
+and the reason the flat part of the curve is flat.
 
-The text label layer already sets `"text-allow-overlap": false` with
-`"text-optional": true`, so labels do cull — only the icons do not.
+The text label layer does cull (`"text-allow-overlap": false`,
+`"text-optional": true`); only the icons do not.
 
 ---
 

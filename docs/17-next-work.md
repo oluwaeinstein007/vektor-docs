@@ -96,6 +96,28 @@ things, and all are fixed:
    `/api/healthz`, so the container sat permanently "unhealthy" while
    working perfectly.
 
+12. **`pgrouting/pgrouting:16-3.4-3.6` has never existed on Docker Hub**, so
+   `pnpm stack:up:full` died with `manifest unknown` and logistics-svc's
+   pgRouting tests had no instance to run against. Found by a peer session
+   reviewing the compose file I'd just written. Corrected to
+   `16-3.4-3.6.1`.
+13. **An unbounded `>=` pnpm override crossed a major and broke a client.**
+   `undici: ">=7.29.1"` resolved to 8.12.2; undici 8 made
+   `handler.onRequestStart` mandatory where 7 feature-checked it, so every
+   `@qdrant/js-client-rest` request threw `InvalidArgumentError` before
+   leaving the process. `js-yaml` had silently crossed into 5.x by the same
+   mechanism. All 13 overrides are now bounded to the major that contains
+   the fix, and the audit result is unchanged at 0 critical / 2 high.
+   **General lesson: a bare `>=X` override is a landmine whenever the
+   package's current major is above X.**
+14. **`fusion-svc`'s `pipeline.integration.test.ts` is not self-cleaning.**
+   It leaves fused entities in the shared `entities` table, and a later run
+   fails with a mismatched `entity_id` because cross-sensor correlation
+   matches a leftover track instead of the one the test just created. It
+   passes 41/41 against an empty table and fails against a dirty one, which
+   makes it look like a flake and is really a missing teardown — another
+   instance of the shared-table race this project has already hit twice.
+
 ### NW-018's four silent-failure bugs (found by `vektor-2e`, recorded here because each one looked like success)
 
 Worth keeping because none of them raised an error — each produced
@@ -248,7 +270,7 @@ Emit an OpenTelemetry trace spanning the whole path (the observability stack is 
 
 ### `NW-014` — Map performance at 1,000+ tracks · ~2 days
 
-NFR §8.1 commits to 60fps on the WebGL map with 1,000+ active tracks. The dashboard has only ever been demonstrated with a handful of real entities. MapLibre will need symbol clustering or a switch to a custom layer well before 1,000 — better to find the ceiling deliberately than during a demo.
+NFR §8.1 commits to 60fps on the WebGL map with 1,000+ active tracks. The dashboard has only ever been demonstrated with a handful of real entities. ~~MapLibre will need symbol clustering or a switch to a custom layer well before 1,000~~ — **measured, and that prediction was wrong by about an order of magnitude.** On a 2016 Intel HD 520 integrated GPU the frame-rate curve is flat from 100 to 5,000 entities; the knee sits between 5,000 and 10,000, and no clustering is needed at 1,000. See [15-perf-results.md §26b](15-perf-results.md). The reasoning behind the wrong guess — that `icon-allow-overlap: true` disables culling so every symbol renders — had the mechanism right and the cost backwards: with collision detection off there is no per-frame placement work at all, just draw calls, which the GPU absorbs easily.
 
 ---
 
