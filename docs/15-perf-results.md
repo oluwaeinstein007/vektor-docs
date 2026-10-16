@@ -48,11 +48,28 @@ carries through to the Entity's `source_sensors`, so a received entity maps
 back to exactly the message that produced it rather than being matched by
 timestamp.
 
-**The COA leg is deliberately excluded.** `coa-svc` needs a live Qdrant with
-a populated doctrine collection plus either a cloud gRPC LLM or a local
-GGUF, and its latency is dominated by model inference on hardware this
-project has never had (PERF-003/004). The figures below are therefore a
-**lower bound on G1**.
+**The COA leg is excluded, and for a more fundamental reason than first
+stated.** The original reason given was practical: `coa-svc` needs a live
+Qdrant with a populated doctrine collection plus either a cloud gRPC LLM or
+a local GGUF, and its latency is dominated by model inference on hardware
+this project has never had (PERF-003/004).
+
+The deeper reason, found 2026-10-16: **nothing automatically triggers COA
+generation.** `POST /api/v1/coa/generate` in `coa-svc/src/routes/generate.ts`
+is the only entry point, it is operator-driven, and a grep for
+`coa/generate` or `COA_SVC_URL` across the whole repo returns that file and
+nothing else. §9.7's data-flow diagram describes "coa-svc triggered by
+alert or operator request", and that route's own comment anticipated
+alert-svc as the second caller "once it exists" — alert-svc exists now and
+does not call it. The automatic leg was never built.
+
+So G1's sensor-to-decision path **has a human in the middle today**.
+Measuring wall-clock across that boundary would measure operator reaction
+time and report it as system latency. The figures below are the machine
+half: sensor to the operator's screen, which is where the automatic path
+currently ends. They are a **lower bound on G1**, and closing the gap is a
+product decision (see [17-next-work.md](17-next-work.md)), not a
+measurement one.
 
 ### 26a.2 Results
 

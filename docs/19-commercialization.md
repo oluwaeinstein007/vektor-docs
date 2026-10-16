@@ -77,7 +77,80 @@ Three tiers, mapping onto the three real deployment shapes the architecture alre
 
 **Integrator / API** — access to the public REST and WebSocket API under a scoped service-account key, for partners embedding VEKTOR into their own tooling. Depends entirely on `NW-017`, which isn't built. Priced per key with rate tiers. Strategically this tier matters more than its revenue: G8 commits to three live third-party integrations by GA, and each integration makes the platform harder to displace.
 
-On absolute numbers: the right band depends on what the vertical currently pays for the things VEKTOR replaces — the VMS, the AIS dashboard, the analyst hours — and that hasn't been researched. Structurally, pricing should land where a customer's annual VEKTOR cost is a visible fraction of the headcount or incident cost it displaces, and where a mid-size deployment is worth enough to justify the deployment effort a self-hosted install genuinely takes. Anchor on displaced cost, not on a cost-plus calculation from §18.2.
+### What the market actually charges (researched 2026-10-16)
+
+An earlier version of this section said the right price band "hasn't been
+researched". It has now, lightly. **Read the source quality caveat at the
+end before using any of these numbers in a conversation with a customer.**
+
+**Video surveillance and analytics — the displaced cost in vertical B:**
+
+| Product / model | Price |
+|---|---|
+| Cloud VSaaS, general | ~$10–50 per camera per month |
+| Verkada | ~$200–1,800 per camera per year, plus ~$35–90 per camera per month |
+| Avigilon Alta (subscription) | ~$179 per camera per year |
+| Avigilon Enterprise (channel licence) | ~$335 MSRP per camera |
+| Milestone (perpetual) | ~$70–250 per camera + $25–50 per year maintenance |
+| Traditional enterprise perpetual | ~$200–300 per camera; maintenance 15–21% of licence per year |
+| A 50-camera site, first year all-in | ~$45,000–150,000 |
+
+**Maritime — the one published, primary-source figure found:** Sirius
+Insight's maritime domain situational awareness service is listed on the UK
+government's G-Cloud framework at **£100,000 per licence per year**, with a
+one-month trial. That is a real government framework price rather than a
+vendor estimate, and it is the single most useful anchor in this document.
+
+**What funds the budget in vertical B:** NERC CIP-014 is the physical
+security standard for substations, and in NERC's own response to a FERC
+order utilities reported **$10–15 million** in substation security
+spending. NERC also recorded roughly **1,700 physical security incidents**
+to the E-ISAC in 2022, up 10.5% year on year. Violations reportedly carry
+fines up to $1M per day per violation (vendor claim, not verified against
+FERC). This is mandated, incident-driven spend, which is the shape that
+closes fastest.
+
+**The competitive set, as far as one pass found it.** Maritime: Sirius
+Insight, Ultra Electronics (SAMS), e-BO e-Surveillance, eNav.my, Knogin.
+Video/VMS: Genetec, Milestone, Verkada, Avigilon, Spot AI, Eagle Eye
+Networks, Hikvision/Dahua. Notably, **none of the maritime vendors found
+publishes pricing** beyond the one G-Cloud listing, which tells you
+something about how that market sells.
+
+### What this implies for VEKTOR's price
+
+Per-camera VMS pricing sets a floor that is lower than instinct suggests. A
+200-camera infrastructure site is paying on the order of $36,000–100,000 a
+year for Avigilon-or-similar *surveillance alone*, before analytics. VEKTOR
+is not competing with that line item — it sits above it, replacing the
+analyst hours and the second and third screens — but a per-sensor price
+that lands far outside that band will be compared to it anyway, fairly or
+not.
+
+The maritime £100,000/year figure is the more encouraging anchor, and the
+more representative one: it prices a *platform* for an agency, not a
+per-device licence, which is the shape VEKTOR's Operations Platform tier
+should take.
+
+So: anchor the Operations Platform tier against the maritime figure and the
+displaced-analyst-headcount argument, not against per-camera VMS. Use
+per-sensor pricing to scale *within* an account rather than to set the
+entry price. And in vertical B, lead with the compliance mandate — $10–15M
+substation security programmes and $1M/day exposure make a six-figure
+platform an easy line item, where the same number is a hard sell as
+discretionary spend.
+
+**Source quality, stated plainly.** Only two figures here are
+primary-source: the Sirius G-Cloud listing and the NERC/FERC substation
+numbers. Everything in the per-camera table comes from vendor blogs,
+reseller comparison pages or AI-generated summaries, several of which
+disagree with each other, and none of which is specific to critical
+infrastructure. They are order-of-magnitude orientation, not benchmarks.
+**Before pricing anything, get three real quotes** — Genetec or Milestone
+for the VMS baseline, and a maritime vendor for the platform comparison —
+and look at public tender notices (TED in Europe, SAM.gov in the US), where
+real procurement prices are published and nothing above has to be taken on
+trust.
 
 ---
 
@@ -153,9 +226,33 @@ Standard pricing, a partner or integrator channel (`NW-017`), and the decision a
 
 Four questions it can't currently answer, in order of how much they'd change the plan:
 
-1. **What do vertical A and B operators pay today** for the VMS, AIS dashboards, analyst hours and incident tooling VEKTOR displaces? This sets the price bands that are currently left abstract.
-2. **Who are the actual incumbents** in each wedge, and how are they packaged? Competitive pricing and packaging is researchable and hasn't been.
+1. ~~**What do vertical A and B operators pay today?**~~ — **partly answered
+   2026-10-16**, see "What the market actually charges" above. Still open:
+   nothing found prices the *analyst hours* VEKTOR displaces, which is the
+   larger half of the ROI argument and the one a customer can compute for
+   themselves.
+2. ~~**Who are the actual incumbents?**~~ — **named above**, though only one
+   of them publishes a price. The remaining gap is how the maritime vendors
+   package and what a real port authority contract contains; public tender
+   notices (TED, SAM.gov) are where that lives and were not searched.
 3. **How long does a real deployment take?** Unknowable before Stage 3, and it determines whether this is a product business or a services business.
 4. **Is there a regulatory or compliance mandate** that funds the budget in verticals A and B? Mandated spend closes far faster than discretionary spend, and finding the mandate is often worth more than finding the feature.
 
 ---
+
+---
+
+## Sources
+
+Pricing and market figures in "What the market actually charges" come from:
+
+- [Sirius Insight — Maritime Domain Situational Awareness, UK G-Cloud](https://www.applytosupply.digitalmarketplace.service.gov.uk/g-cloud/services/981021616158464) — the £100,000/licence/year figure. **Primary source.**
+- [FERC — Evaluation of the Physical Security Reliability Standard](https://www.ferc.gov/news-events/news/presentation-evaluation-physical-security-reliability-standard-and-physical) and [NERC CIP physical security overview](https://securithings.com/blog/nerc-cip-101-what-does-it-mean-for-physical-security) — the $10–15M substation spend and the E-ISAC incident count. **Primary for the FERC/NERC figures.**
+- [Avigilon pricing 2026](https://www.spot.ai/blog/avigilon-pricing-2026) and [Eagle Eye Networks pricing 2026](https://www.spot.ai/blog/eagle-eye-networks-pricing-2026) — competitor-published comparisons; treat as directional.
+- [Video surveillance software companies](https://www.forasoft.com/blog/article/best-video-surveillance-software-companies), [VMS architecture 2026](https://www.forasoft.com/blog/article/video-management-systems-vms-2026-architecture), [video surveillance management systems](https://www.forasoft.com/blog/article/video-surveillance-management-systems) — vendor blog; the per-camera and fleet-size ranges.
+- [Enterprise VMS licence and maintenance ranges](https://checkthat.ai/ai-answers/eb321771-e2aa-435a-9f87-7496b4b5081b) — AI-generated summary; the weakest source here, included only because it agrees with the others.
+- Maritime vendor landscape: [Ultra SAMS datasheet](https://www.ultra-hyperspike.com/media/2333/sams-maritime-datasheet-042821_web.pdf), [e-BO maritime surveillance](https://ebo-enterprises.com/navigate/maritime-surveillance/), [Knogin maritime intelligence](https://knogin.com/developers/maritime-intelligence), [eNav.my](https://edmglobaltech.odoo.com/enav).
+
+**Two of these are primary sources and the rest are not.** The per-camera
+table should be replaced with real quotes before it informs a pricing
+decision.

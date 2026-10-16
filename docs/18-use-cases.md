@@ -57,7 +57,7 @@ Each section below gives the scenario, what already carries it, what's genuinely
 
 **Missing.** Historical playback (`NW-018`) — incident review is most of the job in this vertical. Radar ingest, which is a connector (`NW-019`), not an architecture change.
 
-**Buyer.** Port authority operations director; coastal agency; offshore wind or subsea cable operator. Deal size moderate, procurement real but navigable.
+**Buyer.** Port authority operations director; coastal agency; offshore wind or subsea cable operator. One real published anchor exists for deal size: Sirius Insight lists maritime domain situational awareness on the UK G-Cloud framework at **£100,000 per licence per year**. That is a platform price for an agency, not a per-device licence — which is the shape VEKTOR's Operations Platform tier should take. Notably, no other maritime vendor found publishes pricing at all.
 
 **Why VEKTOR.** Incumbents sell AIS-only dashboards or camera-only VMS. Fusing the two with persistent cross-sensor identity is the differentiator, and the civilian framing means none of the export-control drag of the defence market.
 
@@ -69,7 +69,7 @@ Each section below gives the scenario, what already carries it, what's genuinely
 
 **Missing.** ONVIF camera discovery (`NW-019`) — infrastructure operators have hundreds of existing cameras and will not re-cable. Historical playback (`NW-018`) for incident packets. Multi-site rollup if you sell to an operator with many sites.
 
-**Buyer.** Utility or operator security director, often with a real annual budget line and a compliance mandate (NERC CIP in North America, NIS2 in Europe) that funds it.
+**Buyer.** Utility or operator security director, with a compliance mandate that funds the line item. That claim is now backed rather than asserted: under NERC CIP-014, utilities reported **$10–15M** in substation physical-security spending in NERC's own response to a FERC order, the E-ISAC logged ~**1,700 physical security incidents in 2022** (up 10.5% year on year), and violations reportedly carry fines up to $1M per day. Mandated, incident-driven spend is the shape that closes fastest. See [19-commercialization.md](19-commercialization.md) for sources and the pricing anchors.
 
 **Why VEKTOR.** This is the market where "the AI runs inside your network, nothing leaves" is not a nice-to-have — OT security teams will not permit cloud video analytics on operational networks. The self-hosted anti-goal is a direct competitive weapon here, and the edge deployment mode means remote unmanned sites work without backhaul.
 
@@ -166,7 +166,7 @@ Revisit defence (H) once there are three civilian production deployments to poin
 
 ## What this document is not
 
-It is not market research. No customer has been interviewed, no competitor's pricing has been checked, and no market size has been verified. What it *is* grounded in is the capability inventory at the top, which is real and verified, and the structural observation that those capabilities are domain-neutral.
+It is not market research. No customer has been interviewed and no market size has been verified. Competitor pricing has now had one light pass (2026-10-16) — the results, and a blunt assessment of how trustworthy each source is, are in [19-commercialization.md](19-commercialization.md). Two figures there are primary-source; the rest are vendor blogs. What it *is* grounded in is the capability inventory at the top, which is real and verified, and the structural observation that those capabilities are domain-neutral.
 
 Before committing to a wedge, the cheapest possible validation is roughly ten conversations with operators in verticals A and B — not to sell, but to find out whether the problem as described is the problem they actually have. That is a week of work and it is worth more than anything else in this document.
 

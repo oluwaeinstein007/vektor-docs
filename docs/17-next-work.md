@@ -118,6 +118,31 @@ things, and all are fixed:
    makes it look like a flake and is really a missing teardown — another
    instance of the shared-table race this project has already hit twice.
 
+### `NW-022` — Decide whether an alert should auto-trigger a COA · product decision, then ~3 days
+
+Found while verifying NW-013 (by `vektor-2e`). **G1's "sensor-to-decision
+in under 60 seconds" has a human in the middle of it today.**
+`POST /api/v1/coa/generate` is the only way to start COA generation, it is
+operator-driven, and nothing in the repo calls it — `coa-svc`'s own route
+comment anticipated `alert-svc` as the automatic caller "once it exists",
+and `alert-svc` now exists and does not. §9.7's data-flow diagram
+("coa-svc triggered by alert or operator request") describes a leg that was
+never built.
+
+Wiring `alert-svc` → `coa-svc` is a few days of work. **Whether to is not
+an engineering question.** The product's first permanent anti-goal
+(00-vision.md §3.2) is that VEKTOR never autonomously executes a response
+and every action requires human approval. Auto-*generating* a recommendation
+is not auto-executing one, and a COA sitting ready when the commander opens
+the alert is exactly the decision-loop compression G1 promises. But it also
+means the system produces unprompted recommendations for action, which
+deserves an explicit decision and an ADR rather than arriving as a
+side-effect of a latency task.
+
+Until it is decided, G1 should be stated as two numbers — the machine leg
+(measured, [15-perf-results.md §26a](15-perf-results.md)) and the operator
+leg (unmeasurable, and not the system's to claim).
+
 ### NW-018's four silent-failure bugs (found by `vektor-2e`, recorded here because each one looked like success)
 
 Worth keeping because none of them raised an error — each produced
