@@ -327,7 +327,53 @@ happen to be looking at does not stop it reaching the others. `alt_known`
 exists so the distinction between "measured zero" and "no measurement" is
 carried rather than inferred.
 
-### 26c.4 Methodology: how to reset fusion-svc, and how not to
+### 26c.4 The grep was run, and found a twelfth
+
+§26c.3 ends by suggesting that anywhere the codebase writes `?? 0` for a
+nullable sensor field is a candidate for the same defect. That grep has
+since been run across `vektor-backend/services`, `vektor-backend/packages`
+and `vektor-web/apps`, and the result is recorded here so nobody repeats
+it.
+
+Thirteen hits. Twelve are benign, and are worth naming so they are not
+re-chased:
+
+- **Counters and accumulators** — `(counts[e.affiliation] ?? 0) + 1`,
+  `lastForwardedAt`, `snapshotFrameNumbers`. Zero is the correct identity.
+- **Config defaults** — `COA_MIN_CONFIDENCE ?? 0.15`, `iouThreshold ?? 0.3`,
+  `confidenceThreshold ?? 0.25`. Not sensor data.
+- **SQL aggregates** — `entity_count ?? 0`, `point_count ?? 0`,
+  `dropped ?? 0`. A count of nothing genuinely is zero.
+- **`observationMappers.ts:40`** — `(event.altitude_ft ?? 0) * FEET_TO_METERS`
+  looks like a hit and is not: the next line is
+  `alt_known: event.altitude_ft !== null`, so the zero is explicitly marked
+  as not-a-measurement. This is the intended shape — the placeholder stays
+  because the EKF needs a number, and the provenance travels beside it.
+
+**The thirteenth was real, and it was in the scenario player** — the tool
+that found the original defect. `interpolateAlt` defaulted a missing
+waypoint altitude to 0, so an `adsb` entity authored without `alt_m`
+emitted `altitude_ft: 0, on_ground: true`: a sea-level aircraft, on the
+ground. After the fixes above that distinction became load-bearing in the
+direction that matters, because fusion-svc now treats a *reported* 0 as a
+known altitude — so a scenario aircraft with no stated altitude would
+correlate with any vessel beneath it. The exact merge the vertical gate
+exists to prevent, arriving through the test tool. Fixed the same way:
+`TrackState.alt_known`, `altitude_ft: null` when false, and `on_ground`
+going with it, since a scenario cannot claim an aircraft is grounded from
+an altitude it never gave. Stated altitudes unchanged, `--dry-run`
+byte-identical so determinism holds, 24/24.
+
+**The detail that makes this worth a section rather than a footnote:** the
+engineer who wrote the bug report naming this pattern — "a placeholder
+standing in for a missing measurement, read downstream as real" — was
+shipping an instance of it in the same change. Not through carelessness;
+it simply is not visible from inside the code you are writing. It took
+running the grep, as a mechanical sweep rather than a review, to surface
+it. That is the argument for treating this as a class and sweeping for it
+periodically, rather than as a bug that has now been fixed.
+
+### 26c.5 Methodology: how to reset fusion-svc, and how not to
 
 Two contaminations during this run nearly produced false results, and both
 are silent — they yield plausible extra entities that look like a

@@ -170,8 +170,23 @@ the bad value kept flowing to the next consumer**:
 **This is a provenance problem, not three bugs.** A placeholder substituted
 for a missing measurement will be read as real by whatever consumes it
 next, and fixing the consumer in front of you does not stop it reaching the
-others. Worth checking for the same pattern elsewhere: anywhere the
-codebase writes `?? 0` for a nullable sensor field is a candidate.
+others.
+
+~~Worth checking for the same pattern elsewhere~~ — **that sweep has been
+done.** Thirteen `?? 0` hits across the backend and web source; twelve
+benign (counters, config defaults, SQL aggregates, and the one mapper where
+the placeholder is correctly paired with `alt_known`), and **one real, in
+`packages/scenario` — the tool that found the original defect**. A scenario
+aircraft authored without an altitude emitted `altitude_ft: 0,
+on_ground: true`, which after these fixes means a *known* sea-level
+altitude, so it would merge with any vessel beneath it. Full result in
+[15-perf-results.md §26c.4](15-perf-results.md).
+
+The part worth remembering: that instance was written by the same engineer
+who wrote the report naming the pattern, in the same change. The defect is
+not visible from inside the code you are writing, which is the argument for
+sweeping for it mechanically and periodically rather than treating it as
+fixed.
 
 All four end-to-end cases now pass, verified independently by a second
 session against an isolated stack — see
