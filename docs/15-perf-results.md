@@ -253,6 +253,109 @@ The text label layer does cull (`"text-allow-overlap": false`,
 
 ---
 
+## 26c. Correlation Correctness Verification (2026-10-18)
+
+Not a performance result, recorded here because it is the only end-to-end
+verification of the fusion pipeline's correctness that exists and it
+belongs next to the other measured claims.
+
+### 26c.1 What was being checked
+
+A scenario-driven run found that fusion-svc's correlation gate used
+**horizontal distance only** — `haversineMeters` discards `alt_m` — so an
+aircraft at 3,000m overflying a vessel within ~1.5km was a correlation
+candidate. The two merged into one entity at an EKF-averaged 1,508.8m, an
+altitude belonging to neither platform, and one of the two real contacts
+disappeared from the operational picture. Nothing errored; the surviving
+entity looked entirely normal.
+
+A vertical gate was added, checked against the EKF's *predicted* altitude
+so a climbing aircraft still correlates with itself, with `ewrf` exempt
+from both sides because RF geolocation carries no usable altitude.
+
+### 26c.2 Results
+
+Run by a second session against an isolated stack (own PostGIS, own Redis,
+`perf.*` topics), independently of the session that wrote the fix.
+
+| Case | Scenario | Result |
+|---|---|---|
+| **A** | Ship + aircraft at 3,000m, identical ground track | **PASS** — 2 entities: `Aircraft.ADSB` 3000.2m, `Vessel.AIS` 0.0m. Was 1 entity at 1508.8m |
+| **B** | One aircraft climbing 300→9,000m, 30s reports (~435m climb per report against a 1,000m gate) | **PASS** — 1 track, 8565m. Did not fragment |
+| **C** | ADS-B at 3,000m + 4 EW/RF fixes with no usable altitude | **PASS** — fused, both sensors on one entity, altitude holds at 3000.2m |
+| **D** | ADS-B with `altitude_ft: null` flown over a vessel | **PASS** — 1 entity, `CONFLICTED`. Still merges, by design |
+
+Case B is the one that justifies the predicted-altitude design: a
+last-measured gate would have split that climb into a string of tracks,
+trading the original bug for a worse one.
+
+Case D is the documented intent rather than a compromise. An altitude-less
+report can still merge with a surface track, which is the pre-existing
+behaviour and the safer of the two errors — a wrongly merged track is
+visible and recoverable, splitting one aircraft across many tracks on
+fabricated altitude is neither. What changed is that the classification
+conflict now **latches** `CONFLICTED`, so the merge is visible instead of
+silent. Previously the flag was recomputed per observation and the next
+agreeing one erased it, meaning under continuous dual-sensor input an
+operator would essentially never see it.
+
+### 26c.3 One defect, found three times
+
+Case C initially failed, and failed in a way worth recording. The
+correlation was right — the RF emission joined the airborne track, SVC-011
+intact — but the aircraft's altitude read **−247m**. Below sea level. Four
+consecutive RF fixes had dragged a known-good 3,000m track down through
+zero, the overshoot being the filter's velocity term.
+
+That was the third appearance of a single underlying defect, and the first
+two fixes were each correct in isolation while the bad value kept flowing
+to the next consumer:
+
+1. The **gate** ignored altitude entirely. Fixed by adding a vertical gate.
+2. The **ADS-B mapper** coerced a null `altitude_ft` to `0`, so "not
+   reported" was indistinguishable from "at sea level". Fixed by adding
+   `alt_known`.
+3. The **EKF** was still handed that same placeholder `0` as a
+   *measurement*, by the EW/RF mapper. Fixed by having `alt_known: false`
+   suppress the altitude update, not merely the gate.
+
+**This is a provenance problem, not three bugs.** Each layer learned that
+altitude could be unknown; none of them told the next. The lesson that
+generalises: a placeholder substituted for a missing measurement will be
+read as real by whatever consumes it next, and fixing the consumer you
+happen to be looking at does not stop it reaching the others. `alt_known`
+exists so the distinction between "measured zero" and "no measurement" is
+carried rather than inferred.
+
+### 26c.4 Methodology: how to reset fusion-svc, and how not to
+
+Two contaminations during this run nearly produced false results, and both
+are silent — they yield plausible extra entities that look like a
+correlation bug rather than like leftovers.
+
+- **`TRUNCATE entities` does not reset fusion-svc.** In-memory TrackManager
+  state survives and gets re-upserted. Case A came back as 3 entities
+  because a phantom `Aircraft.ADSB` at 0.0m from an earlier case was still
+  live in the tracker.
+- **Restarting the process makes it worse, not better.** Observations
+  buffered in Redis Streams survive, so the pipeline re-consumes the whole
+  session backlog and repopulates the table — 20 rows in one case,
+  including `LOST` tracks from an earlier scenario. Kafka is not the
+  culprit: `ingestConsumers.ts` uses `fromBeginning: false`.
+
+**The reliable reset is `redis-cli FLUSHALL`, then restart, then
+`TRUNCATE`.** Any fusion-svc entity count taken without flushing Redis
+first should be treated as suspect. The same hazard, reached from a
+different direction, already cost this project a day over the
+sensorCoverage/pipeline test collision.
+
+The regression tests covering all of the above live in
+`services/fusion-svc/tests/trackManager.test.ts` and run in CI without
+infrastructure; the end-to-end cases above need a live stack and are
+reproduced by publishing to the real ingest topics.
+
+---
+
 ## 27. PERF-002/003/004 — Hardware-Dependent Benchmarks (Not Runnable in This Sandbox)
 
 Consistent with every prior phase's honest treatment of the same constraint (Phase 2's `onnxruntime-node` GPU path, Phase 4's `vllm` engine construction, Phase 6's ARM64 build gap — see [10-risks-pitfalls.md](10-risks-pitfalls.md) and the Phase 6 roadmap note):

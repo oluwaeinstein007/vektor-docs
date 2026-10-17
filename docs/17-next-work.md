@@ -143,6 +143,50 @@ Until it is decided, G1 should be stated as two numbers — the machine leg
 (measured, [15-perf-results.md §26a](15-perf-results.md)) and the operator
 leg (unmeasurable, and not the system's to claim).
 
+### The altitude-provenance defect, and why it took three fixes (2026-10-18)
+
+Recorded because the shape generalises well beyond this one field.
+
+fusion-svc's correlation gate used horizontal distance only, so an aircraft
+at 3,000m overflying a vessel merged into the vessel's track at an averaged
+1,508m and one real contact vanished — silently, with the surviving entity
+looking normal. Found by driving the pipeline with a scenario (NW-020), not
+by reading the code.
+
+Fixing it took three passes, and **each fix was correct in isolation while
+the bad value kept flowing to the next consumer**:
+
+1. The gate ignored altitude. Added a vertical gate, checked against the
+   EKF's *predicted* altitude so a climbing aircraft still correlates with
+   itself, with `ewrf` exempt because RF geolocation has no usable altitude.
+2. The ADS-B mapper coerced a nullable `altitude_ft` to `0`, so "not
+   reported" was indistinguishable from "at sea level" and an altitude-less
+   aircraft still merged with ships. Added `alt_known`.
+3. The EKF was *still* being handed that placeholder `0` as a measurement
+   by the EW/RF mapper. Four RF fixes dragged a known-good 3,000m aircraft
+   to **−247m**, below sea level. Made `alt_known: false` suppress the
+   altitude update, not just the gate.
+
+**This is a provenance problem, not three bugs.** A placeholder substituted
+for a missing measurement will be read as real by whatever consumes it
+next, and fixing the consumer in front of you does not stop it reaching the
+others. Worth checking for the same pattern elsewhere: anywhere the
+codebase writes `?? 0` for a nullable sensor field is a candidate.
+
+All four end-to-end cases now pass, verified independently by a second
+session against an isolated stack — see
+[15-perf-results.md §26c](15-perf-results.md), which also records the
+non-obvious way to reset fusion-svc between runs (`FLUSHALL`, restart,
+`TRUNCATE` — a truncate alone leaves in-memory tracks and Redis-buffered
+observations that silently repopulate the table).
+
+Two related defects fixed alongside, both found by the same verification:
+`/healthz` returned 200 while the pipeline failed every cycle — 117
+consecutive failures behind a green probe, which on Kubernetes means no
+restart and no alert — and Kafka consumer group ids were not namespaced by
+`VEKTOR_ENV`, so two instances on one broker joined the same group and each
+silently received a subset of the other's topics.
+
 ### NW-018's four silent-failure bugs (found by `vektor-2e`, recorded here because each one looked like success)
 
 Worth keeping because none of them raised an error — each produced
