@@ -27,12 +27,12 @@ verified against real infrastructure rather than asserted:
 
 | Task | State | Evidence |
 |---|---|---|
-| `NW-001` Dockerfiles | **done** | All 12 services have one (was 3), and **11 of 12 images actually build** — `reporting-svc` is the holdout, failing twice on transient network (an apt mirror `Err:78 libflac12`, then an IPv6 route to auth.docker.io), never on its Dockerfile. `geospatial-svc` was smoke-tested end to end: real container → compose Postgres → real Keycloak JWT → 401 unauthenticated, 200 with an Analyst token |
+| `NW-001` Dockerfiles | **done** | All 12 services have one (was 3), and **all 12 images build and run** — `reporting-svc` needed three attempts, failing twice on transient network (an apt mirror `Err:78 libflac12`, then an IPv6 route to auth.docker.io), never on its Dockerfile. Every image was then verified to load its full module graph, not merely to tag: each exits on its own config guard (`DATABASE_URL is required`), which is what proves the cross-repo `link:@vektor/proto` resolves inside the image. `onnxruntime-node` and `better-sqlite3` load with working native bindings; `reporting-svc` carries Chromium 155 at the path its `CHROME_EXECUTABLE_PATH` expects. `geospatial-svc` was smoke-tested end to end: real container → compose Postgres → real Keycloak JWT → 401 unauthenticated, 200 with an Analyst token |
 | `NW-002` publish CI | **written, unrun** | `.github/workflows/release-images.yml` — 12-service matrix, amd64+arm64, GHCR. Cannot be verified without pushing to the real registry |
 | `NW-003` cloud compose | **done** | `compose/docker-compose.dev.yml` + `scripts/dev-stack.sh`. 7 core containers healthy; all 9 migrations apply to an empty database; fusion-svc 41/41 and reporting-svc 11/11 run against it |
 | `NW-004` deployed instance | **prepared, not deployed** | Per your call: everything builds and runs locally; the deploy step is yours |
 | `NW-005` blue-force RBAC | **done** | 7 routes gated, frontend switched to authenticated fetch, 4 new tests, fusion-svc 41/41 green |
-| `NW-006` CI test gaps | **partly done** | `packages/auth` + `reporting-svc` added after verifying what they really need; `coa-svc`/`logistics-svc` still out |
+| `NW-006` CI test gaps | **partly done** | `packages/auth` + `reporting-svc` added after verifying what they really need. `coa-svc` and `logistics-svc` are still out of CI, but both have now been **run for real** against the full stack — coa-svc 42/42, logistics-svc 14/14 — so what they need is known rather than guessed |
 | `NW-007` GGUF fixture | **was already fixed** | See correction below |
 | `NW-008` coverage | **done** | `test:coverage` on 17 packages. First measured number: `@vektor/auth` 96.61% lines / 81.58% branches |
 | `NW-009` dep audit | **done** | 4 critical/48 high → **0 critical/2 high**. 13 `pnpm.overrides`, nodemailer 9→10 (verified by a real SMTP send), new CI `audit` job that fails on high/critical |
@@ -41,6 +41,48 @@ verified against real infrastructure rather than asserted:
 | `NW-010` SEC-005 LUKS | **done by a peer session** | Delivered concurrently by session `vektor-2e` — 9 files in `vektor-edge`, verified against real cryptsetup 2.7.0/LUKS2. Found two genuine bugs on the way: k3s was bootstrapping without `--secrets-encryption` and onto a plaintext data dir |
 | `NW-018` historical playback | **done by a peer session** | Delivered by `vektor-2e`. New `entity_history` table (RANGE-partitioned by day), a Kafka projector, 4 `analyst+`-gated routes in `geospatial-svc`, and a time-slider + track layer in `apps/web`. 19 backend + 18 frontend tests; geospatial-svc 30/30 against real PostGIS |
 | `NW-011` licence | **done** | Open-core: Apache-2.0 on `vektor-proto`/`-edge`/`-infra`/`-docs`, BSL 1.1 (→ Apache-2.0 on 2030-10-16) on `-backend`/`-web`/`-ml`; 27 `package.json` files moved off `UNLICENSED` |
+| `NW-020` scenario player | **done by a peer session** | Delivered by `vektor-2e` as `@vektor/scenario`. Deterministic: same scenario and seed give byte-identical `--dry-run` output, and jitter is keyed per (seed, entity) so adding an entity cannot silently change every other track. 22 tests, verified driving a live fusion-svc. **Caveat recorded in its README:** above `--speed 1` the EKF multiplies derived velocity by playback speed (positions advance at scenario rate, timestamps at wall-clock rate) — a 13-knot vessel reads 9,669 km/h at 30×. Use `--speed 1` for anything calibrated |
+| `NW-015` multi-tenancy | **groundwork done, decision still open** | `organisations` + `org_id` on all 15 tenant-scoped tables (including the partitioned `entity_history`), `withOrgScope()`, RLS policies, and `org_id` on the verified JWT principal. **Deliberately does not decide whether VEKTOR should be multi-tenant** — see the note below. A no-op for single-tenant. packages/db 12/12 through a real non-owner role with two organisations' rows in the same tables |
+| `NW-016` usage metering | **done** | New `@vektor/metering`. Six billable axes, emitted fire-and-forget (batched, bounded, lossy under pressure by design) and rolled up per (organisation, metric, hour). The rollup is **exactly-once**: the consumer's Kafka offset is committed in the same transaction as the increment, so a replayed batch cannot double-count a number that ends up on an invoice. 14/14 against real Postgres |
+| `NW-017` integrator API keys | **done** | `vk_<prefix>_<secret>` keys, org-scoped, with scopes, per-key rate limits and timestamp revocation. `requireRole()` is unchanged and now accepts either credential, so every already-gated route works with a key untouched. Not OAuth2-against-Keycloak, deliberately — that would leave the edge profile, which runs with no Keycloak, unable to authenticate an integration. packages/auth 21/21 |
+| `NW-019` connector SDK | **SDK + 3 reference connectors done; existing adapters not ported** | New `@vektor/connector-sdk`. Three connectors of three deliberately different shapes — `modbus-tcp` polls, `lorawan-webhook` listens, `onvif-discovery` resolves — because an interface that only fitted pollers would be a poller framework wearing a connector's name. Modbus and LoRaWAN are verified against a real TCP server speaking real MBAP framing and a real HTTP server; **ONVIF has never seen a real camera** and says so. 18/18. The SDK also fixes a latent defect it was built from: `aisAdapter` never reconnects, so a dropped AIS feed stops silently with ingest-svc still healthy |
+
+### The multi-tenancy decision is still open, and that is deliberate
+
+`NW-015` shipped the *groundwork* and pointedly not the *decision*. The schema
+now carries an organisation key everywhere, defaulted so a single-tenant
+deployment behaves exactly as it did before. What that buys is optionality:
+the expensive, irreversible half of multi-tenancy is retrofitting a tenant key
+onto fifteen tables that already hold production data, and that is now done
+while it was still free.
+
+Someone still has to choose. The case each way, briefly:
+
+**Stay single-tenant.** [18-use-cases.md](18-use-cases.md)'s two
+strongest-ranked verticals — maritime domain awareness and critical
+infrastructure — are both shaped like self-hosted installs and edge
+appliances, not like SaaS tenants. "No data leaves your boundary, ever"
+is the sentence that ends the security objection in both, and a hosted
+multi-tenant offering weakens it. Single-tenant also means the RLS work
+below stays a defence-in-depth backstop rather than the primary control.
+
+**Go multi-tenant.** It is the only way to serve small customers whose whole
+annual contract is less than the cost of standing up an install for them,
+and [19-commercialization.md](19-commercialization.md)'s Stage 5 assumes a
+repeatable motion that per-customer deployments do not give you.
+
+**What would decide it:** whether the first three paying customers want to run
+it themselves. That is knowable from Stage 2 of
+[19-commercialization.md](19-commercialization.md)'s sequencing and not before,
+so the honest answer today is "not yet, and nothing is blocked by not knowing".
+
+One deployment note that applies either way: **the RLS policies are inert
+today.** They are scoped `TO vektor_app`, Postgres never applies RLS to a
+table's owner or to a superuser, and every `DATABASE_URL` in this repo still
+connects as `postgres`. This is the same gap SEC-003 left on `audit_log` in
+migration 0007. Closing it means switching each service's connection identity
+to `vektor_app` as part of an infra/secrets rollout (INFRA-010) — it is not a
+migration, and no migration can do it.
 
 ### Bugs found and fixed while doing the above
 
